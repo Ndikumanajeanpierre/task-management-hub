@@ -23,7 +23,7 @@ app.use(cors({ origin: process.env.CLIENT_URL }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check route
+// ─── Health check ─────────────────────────────
 app.get('/', (req, res) => {
   res.json({
     message: '🚀 Task Management Hub API is running',
@@ -31,19 +31,58 @@ app.get('/', (req, res) => {
     status: 'OK'
   });
 });
-// Import routes
-const authRoutes = require('./routes/auth.routes');
 
-// Use routes
-app.use('/api/auth', authRoutes);
+// ─── Import Routes ────────────────────────────
+const authRoutes     = require('./routes/auth.routes');
+const usersRoutes    = require('./routes/users.routes');
+const teamsRoutes    = require('./routes/teams.routes');
+const projectRoutes  = require('./routes/projects.routes');
+const tasksRoutes    = require('./routes/tasks.routes');
 
-// Socket.io connection
+// ─── Use Routes ───────────────────────────────
+app.use('/api/auth',     authRoutes);
+app.use('/api/users',    usersRoutes);
+app.use('/api/teams',    teamsRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/tasks',    tasksRoutes);
+
+// ─── 404 Handler ──────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.url} not found`
+  });
+});
+
+// ─── Global Error Handler ─────────────────────
+app.use((err, req, res, next) => {
+  console.error('Global error:', err.message);
+  res.status(500).json({
+    success: false,
+    message: 'Something went wrong on the server.'
+  });
+});
+
+// ─── Socket.io ────────────────────────────────
 io.on('connection', (socket) => {
   console.log(`⚡ User connected: ${socket.id}`);
 
+  // Join a project room for real-time updates
   socket.on('join_project', (projectId) => {
     socket.join(`project_${projectId}`);
     console.log(`User joined project room: ${projectId}`);
+  });
+
+  // Leave a project room
+  socket.on('leave_project', (projectId) => {
+    socket.leave(`project_${projectId}`);
+    console.log(`User left project room: ${projectId}`);
+  });
+
+  // Task drag and drop from frontend
+  socket.on('task_moved', (data) => {
+    // Broadcast to everyone else in the project room
+    socket.to(`project_${data.project_id}`).emit('task_updated', data);
   });
 
   socket.on('disconnect', () => {
@@ -51,11 +90,13 @@ io.on('connection', (socket) => {
   });
 });
 
-// Make io accessible in routes
+// Make io accessible in all route controllers
 app.set('io', io);
 
-// Start server
+// ─── Start Server ─────────────────────────────
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📡 Socket.io ready for real-time connections`);
+  console.log(`🗄️  Database: ${process.env.DB_NAME}`);
 });
