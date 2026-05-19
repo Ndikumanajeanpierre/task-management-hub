@@ -14,11 +14,15 @@ const createProject = async (req, res) => {
       [name, description || null, team_id, req.user.id, start_date || null, end_date || null]
     );
 
-    // Log activity
-    await db.query(
-      'INSERT INTO activity_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)',
-      [req.user.id, result.insertId, 'project_created', `Project "${name}" was created`]
-    );
+    // Log activity (wrapped so it never breaks project creation)
+    try {
+      await db.query(
+        'INSERT INTO activity_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)',
+        [req.user.id, result.insertId, 'project_created', `Project "${name}" was created`]
+      );
+    } catch (logErr) {
+      console.log('Activity log warning:', logErr.message);
+    }
 
     return res.status(201).json({
       success: true,
