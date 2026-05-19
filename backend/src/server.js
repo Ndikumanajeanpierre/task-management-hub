@@ -31,6 +31,11 @@ app.get('/', (req, res) => {
     status: 'OK'
   });
 });
+// Import routes
+const authRoutes = require('./routes/auth.routes');
+
+// Use routes
+app.use('/api/auth', authRoutes);
 
 // Socket.io connection
 io.on('connection', (socket) => {
