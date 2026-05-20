@@ -3,11 +3,15 @@ import { useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
+import BoardPage from './pages/BoardPage'
 
-// Protected route wrapper
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth()
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-400">Loading...</div>
+    </div>
+  )
   return token ? children : <Navigate to="/login" />
 }
 
@@ -18,9 +22,10 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <DashboardPage />
-        </ProtectedRoute>
+        <ProtectedRoute><DashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/projects/:id" element={
+        <ProtectedRoute><BoardPage /></ProtectedRoute>
       } />
     </Routes>
   )
