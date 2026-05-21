@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage'
 import BoardPage from './pages/BoardPage'
 import CreateProjectPage from './pages/CreateProjectPage'
 import AdminPage from './pages/AdminPage'
+import ProfilePage from './pages/ProfilePage'
 
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth()
@@ -34,6 +35,9 @@ export default function App() {
       } />
       <Route path="/admin" element={
   <ProtectedRoute><AdminPage /></ProtectedRoute>
+} />
+<Route path="/profile" element={
+  <ProtectedRoute><ProfilePage /></ProtectedRoute>
 } />
     </Routes>
     
