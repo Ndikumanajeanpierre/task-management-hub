@@ -129,7 +129,7 @@ export default function DashboardPage() {
   >
     ⚙️ Admin
   </Link>
-)}
+)}  
               <button
                 onClick={handleLogout}
                 className="text-sm text-gray-400 hover:text-red-500 font-medium transition px-2"
