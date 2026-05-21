@@ -123,4 +123,24 @@ const getProjectActivity = async (req, res) => {
   }
 };
 
-module.exports = { createProject, getAllProjects, getProjectById, updateProject, deleteProject, getProjectActivity };
+// ARCHIVE project
+const archiveProject = async (req, res) => {
+  try {
+    await db.query(
+      'UPDATE projects SET status = "completed" WHERE id = ?',
+      [req.params.id]
+    );
+    try {
+      await db.query(
+        'INSERT INTO activity_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)',
+        [req.user.id, req.params.id, 'project_archived', 'Project was archived']
+      );
+    } catch (logErr) { console.log('Log warning:', logErr.message) }
+
+    return res.status(200).json({ success: true, message: 'Project archived.' });
+  } catch (error) {
+    console.error('ArchiveProject error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+module.exports = { createProject, getAllProjects, getProjectById, updateProject, deleteProject, getProjectActivity, archiveProject };

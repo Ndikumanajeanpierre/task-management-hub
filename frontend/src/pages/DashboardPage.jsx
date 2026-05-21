@@ -64,6 +64,8 @@ export default function DashboardPage() {
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center h-16">
+
+            {/* Logo */}
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
                 <span className="text-white font-bold text-sm">T</span>
@@ -71,7 +73,9 @@ export default function DashboardPage() {
               <span className="font-extrabold text-gray-800 text-lg tracking-tight">Task Hub</span>
             </div>
 
+            {/* Right Side */}
             <div className="flex items-center gap-3">
+
               {/* Notifications Bell */}
               <div className="relative">
                 <button
@@ -110,11 +114,29 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* User Info */}
+              {/* Teams Link */}
+              <Link
+                to="/teams"
+                className="text-sm bg-green-50 text-green-600 hover:bg-green-100 font-semibold px-3 py-1.5 rounded-lg transition"
+              >
+                👥 Teams
+              </Link>
+
+              {/* Admin Link */}
+              {user?.role === 'admin' && (
+                <Link
+                  to="/admin"
+                  className="text-sm bg-red-50 text-red-600 hover:bg-red-100 font-semibold px-3 py-1.5 rounded-lg transition"
+                >
+                  ⚙️ Admin
+                </Link>
+              )}
+
+              {/* User Info — click to go to profile */}
               <div
-  onClick={() => navigate('/profile')}
-  className="flex items-center gap-2 bg-gray-100 rounded-xl px-3 py-2 cursor-pointer hover:bg-gray-200 transition"
->
+                onClick={() => navigate('/profile')}
+                className="flex items-center gap-2 bg-gray-100 rounded-xl px-3 py-2 cursor-pointer hover:bg-gray-200 transition"
+              >
                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
                   <span className="text-white text-xs font-bold">
                     {user?.name?.charAt(0).toUpperCase()}
@@ -125,14 +147,8 @@ export default function DashboardPage() {
                   {user?.role}
                 </span>
               </div>
-{user?.role === 'admin' && (
-  <Link
-    to="/admin"
-    className="text-sm bg-red-50 text-red-600 hover:bg-red-100 font-semibold px-3 py-1.5 rounded-lg transition"
-  >
-    ⚙️ Admin
-  </Link>
-)}  
+
+              {/* Logout */}
               <button
                 onClick={handleLogout}
                 className="text-sm text-gray-400 hover:text-red-500 font-medium transition px-2"
@@ -145,6 +161,7 @@ export default function DashboardPage() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-extrabold text-gray-800">

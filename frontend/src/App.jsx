@@ -5,6 +5,8 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import BoardPage from './pages/BoardPage'
 import CreateProjectPage from './pages/CreateProjectPage'
+import CreateTeamPage from './pages/CreateTeamPage'
+import TeamsPage from './pages/TeamsPage'
 import AdminPage from './pages/AdminPage'
 import ProfilePage from './pages/ProfilePage'
 
@@ -33,13 +35,18 @@ export default function App() {
       <Route path="/projects/:id" element={
         <ProtectedRoute><BoardPage /></ProtectedRoute>
       } />
+      <Route path="/teams" element={
+        <ProtectedRoute><TeamsPage /></ProtectedRoute>
+      } />
+      <Route path="/teams/new" element={
+        <ProtectedRoute><CreateTeamPage /></ProtectedRoute>
+      } />
       <Route path="/admin" element={
-  <ProtectedRoute><AdminPage /></ProtectedRoute>
-} />
-<Route path="/profile" element={
-  <ProtectedRoute><ProfilePage /></ProtectedRoute>
-} />
+        <ProtectedRoute><AdminPage /></ProtectedRoute>
+      } />
+      <Route path="/profile" element={
+        <ProtectedRoute><ProfilePage /></ProtectedRoute>
+      } />
     </Routes>
-    
   )
 }
