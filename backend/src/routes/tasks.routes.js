@@ -1,14 +1,42 @@
-const express = require('express');
-const router = express.Router();
-const { createTask, getTasksByProject, getTaskById, updateTask, deleteTask, addComment, getNotifications } = require('../controllers/tasks.controller');
-const { auth } = require('../middleware/auth');
+const express = require('express')
+const router = express.Router()
+const multer = require('multer')
+const path = require('path')
+const {
+  createTask, getTasksByProject, getTaskById,
+  updateTask, deleteTask, addComment,
+  getNotifications, uploadAttachment, getAttachments
+} = require('../controllers/tasks.controller')
+const { auth } = require('../middleware/auth')
 
-router.post('/', auth, createTask);
-router.get('/project/:projectId', auth, getTasksByProject);
-router.get('/notifications', auth, getNotifications);
-router.get('/:id', auth, getTaskById);
-router.patch('/:id', auth, updateTask);
-router.delete('/:id', auth, deleteTask);
-router.post('/:id/comments', auth, addComment);
+// Multer config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9)
+    cb(null, unique + path.extname(file.originalname))
+  }
+})
 
-module.exports = router;
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = /pdf|doc|docx|png|jpg|jpeg|zip/
+    const ext = path.extname(file.originalname).toLowerCase()
+    if (allowed.test(ext)) cb(null, true)
+    else cb(new Error('File type not allowed'))
+  }
+})
+
+router.post('/', auth, createTask)
+router.get('/project/:projectId', auth, getTasksByProject)
+router.get('/notifications', auth, getNotifications)
+router.get('/:id', auth, getTaskById)
+router.patch('/:id', auth, updateTask)
+router.delete('/:id', auth, deleteTask)
+router.post('/:id/comments', auth, addComment)
+router.post('/:id/attachments', auth, upload.single('file'), uploadAttachment)
+router.get('/:id/attachments', auth, getAttachments)
+
+module.exports = router

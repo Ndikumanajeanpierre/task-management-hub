@@ -46,32 +46,35 @@ const createTask = async (req, res) => {
   }
 };
 
-// GET all tasks for a project
+// GET all tasks for a project// GET all tasks for a project
 const getTasksByProject = async (req, res) => {
   try {
-    const { status, priority, assigned_to } = req.query;
+    const { status, priority, assigned_to, due_date_from, due_date_to, search } = req.query
     let query = `
       SELECT t.*, u.name AS assigned_to_name, c.name AS created_by_name
       FROM tasks t
       LEFT JOIN users u ON t.assigned_to = u.id
       LEFT JOIN users c ON t.created_by = c.id
       WHERE t.project_id = ?
-    `;
-    const params = [req.params.projectId];
+    `
+    const params = [req.params.projectId]
 
-    if (status) { query += ' AND t.status = ?'; params.push(status); }
-    if (priority) { query += ' AND t.priority = ?'; params.push(priority); }
-    if (assigned_to) { query += ' AND t.assigned_to = ?'; params.push(assigned_to); }
+    if (status) { query += ' AND t.status = ?'; params.push(status) }
+    if (priority) { query += ' AND t.priority = ?'; params.push(priority) }
+    if (assigned_to) { query += ' AND t.assigned_to = ?'; params.push(assigned_to) }
+    if (due_date_from) { query += ' AND t.due_date >= ?'; params.push(due_date_from) }
+    if (due_date_to) { query += ' AND t.due_date <= ?'; params.push(due_date_to) }
+    if (search) { query += ' AND (t.title LIKE ? OR t.description LIKE ?)'; params.push(`%${search}%`, `%${search}%`) }
 
-    query += ' ORDER BY t.position ASC, t.created_at DESC';
+    query += ' ORDER BY t.position ASC, t.created_at DESC'
 
-    const [tasks] = await db.query(query, params);
-    return res.status(200).json({ success: true, tasks });
+    const [tasks] = await db.query(query, params)
+    return res.status(200).json({ success: true, tasks })
   } catch (error) {
-    console.error('GetTasksByProject error:', error.message);
-    return res.status(500).json({ success: false, message: 'Server error.' });
+    console.error('GetTasksByProject error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
   }
-};
+}
 
 // GET single task
 const getTaskById = async (req, res) => {
@@ -233,5 +236,54 @@ const getNotifications = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
+// UPLOAD attachment
+const uploadAttachment = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded.' })
+    }
 
-module.exports = { createTask, getTasksByProject, getTaskById, updateTask, deleteTask, addComment, getNotifications };
+    const [task] = await db.query('SELECT * FROM tasks WHERE id = ?', [req.params.id])
+    if (task.length === 0) {
+      return res.status(404).json({ success: false, message: 'Task not found.' })
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO attachments (task_id, uploaded_by, file_name, file_path, file_size) VALUES (?, ?, ?, ?, ?)',
+      [req.params.id, req.user.id, req.file.originalname, req.file.path, req.file.size]
+    )
+
+    return res.status(201).json({
+      success: true,
+      message: 'File uploaded successfully.',
+      attachment: {
+        id: result.insertId,
+        file_name: req.file.originalname,
+        file_size: req.file.size,
+      }
+    })
+  } catch (error) {
+    console.error('UploadAttachment error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
+  }
+}
+
+// GET attachments for a task
+const getAttachments = async (req, res) => {
+  try {
+    const [attachments] = await db.query(
+      `SELECT a.*, u.name AS uploaded_by_name
+       FROM attachments a
+       JOIN users u ON a.uploaded_by = u.id
+       WHERE a.task_id = ?
+       ORDER BY a.uploaded_at DESC`,
+      [req.params.id]
+    )
+    return res.status(200).json({ success: true, attachments })
+  } catch (error) {
+    console.error('GetAttachments error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
+  }
+}
+
+module.exports = { createTask, getTasksByProject, getTaskById, updateTask, deleteTask, addComment, getNotifications, uploadAttachment, getAttachments }
