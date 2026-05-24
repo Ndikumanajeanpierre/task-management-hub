@@ -3,17 +3,17 @@ const db = require('../config/db');
 // CREATE task
 const createTask = async (req, res) => {
   try {
-    const { title, description, project_id, assigned_to, priority, due_date, status } = req.body;
+    const { title, description, project_id, assigned_to, priority, due_date, status, labels } = req.body;
     if (!title || !project_id) {
       return res.status(400).json({ success: false, message: 'Title and project are required.' });
     }
 
-    const [result] = await db.query(
-      `INSERT INTO tasks (title, description, project_id, assigned_to, created_by, priority, due_date, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, description || null, project_id, assigned_to || null, req.user.id,
-       priority || 'medium', due_date || null, status || 'todo']
-    );
+   const [result] = await db.query(
+  `INSERT INTO tasks (title, description, project_id, assigned_to, created_by, priority, due_date, status, labels)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  [title, description || null, project_id, assigned_to || null, req.user.id,
+   priority || 'medium', due_date || null, status || 'todo', labels || null]
+);
 
     // Log activity
     await db.query(

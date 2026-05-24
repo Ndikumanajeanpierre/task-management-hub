@@ -2,13 +2,14 @@ import { useState } from 'react'
 import api from '../services/api'
 
 export default function CreateTaskModal({ projectId, defaultStatus, onClose, onCreated }) {
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    priority: 'medium',
-    due_date: '',
-    status: defaultStatus || 'todo',
-  })
+ const [form, setForm] = useState({
+  title: '',
+  description: '',
+  priority: 'medium',
+  due_date: '',
+  status: defaultStatus || 'todo',
+  labels: '',
+})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -113,6 +114,20 @@ export default function CreateTaskModal({ projectId, defaultStatus, onClose, onC
               className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Labels
+    <span className="text-gray-400 font-normal ml-1">(comma separated)</span>
+  </label>
+  <input
+    type="text"
+    name="labels"
+    value={form.labels}
+    onChange={handleChange}
+    className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+    placeholder="e.g. frontend, bug, urgent"
+  />
+</div>
         </div>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">

@@ -53,7 +53,19 @@ export default function TaskCard({ task, index, onClick }) {
               {task.description}
             </p>
           )}
-
+{/* Labels */}
+{task.labels && (
+  <div className="flex flex-wrap gap-1 mb-2">
+    {task.labels.split(',').map((label, i) => (
+      <span
+        key={i}
+        className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium border border-indigo-100"
+      >
+        {label.trim()}
+      </span>
+    ))}
+  </div>
+)}
           {/* Footer */}
           <div className="flex justify-between items-center mt-2">
             {task.assigned_to_name ? (

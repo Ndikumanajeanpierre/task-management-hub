@@ -438,7 +438,57 @@ export default function AdminPage() {
                     })}
                   </div>
                 </div>
-
+{/* Due Date Tracking */}
+<div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+  <h3 className="font-bold text-gray-800 mb-1">📅 Due Date Tracking</h3>
+  <p className="text-xs text-gray-400 mb-5">Project timeline and deadline overview</p>
+  <div className="space-y-3">
+    {projects.map(p => {
+      const isOverdue = p.end_date && new Date(p.end_date) < new Date()
+      const isDueSoon = p.end_date && !isOverdue &&
+        new Date(p.end_date) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      return (
+        <div key={p.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">{p.name.charAt(0)}</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-800">{p.name}</p>
+              <p className="text-xs text-gray-400">
+                {p.end_date
+                  ? 'Due: ' + new Date(p.end_date).toLocaleDateString()
+                  : 'No deadline set'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+              statusColor[p.status] || 'bg-gray-100 text-gray-600'
+            }`}>
+              {p.status}
+            </span>
+            {isOverdue && p.status !== 'completed' && (
+              <span className="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-full font-semibold">
+                ⚠ Overdue
+              </span>
+            )}
+            {isDueSoon && (
+              <span className="text-xs bg-amber-100 text-amber-600 px-3 py-1 rounded-full font-semibold">
+                ⏰ Due Soon
+              </span>
+            )}
+            {!p.end_date && (
+              <span className="text-xs bg-gray-100 text-gray-400 px-3 py-1 rounded-full font-semibold">
+                No deadline
+              </span>
+            )}
+          </div>
+        </div>
+      )
+    })}
+  </div>
+</div>
                 {/* System Summary */}
                 <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white">
                   <h3 className="font-bold text-lg mb-2">🎯 System Summary</h3>
