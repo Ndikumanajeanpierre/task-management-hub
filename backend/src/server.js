@@ -22,6 +22,8 @@ const io = new Server(server, {
 app.use(cors({ origin: process.env.CLIENT_URL }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'))
 
 // ─── Health check ─────────────────────────────
 app.get('/', (req, res) => {
