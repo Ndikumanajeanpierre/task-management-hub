@@ -16,24 +16,26 @@ export default function BoardPage() {
   const { user } = useAuth()
   const { socket } = useSocket()
 
-  const [project, setProject]           = useState(null)
-  const [tasks, setTasks]               = useState([])
-  const [activityLogs, setActivityLogs] = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [selectedTask, setSelectedTask] = useState(null)
-  const [createModal, setCreateModal]   = useState(null)
-  const [filter, setFilter]             = useState({
+  const [project, setProject]             = useState(null)
+  const [tasks, setTasks]                 = useState([])
+  const [activityLogs, setActivityLogs]   = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [selectedTask, setSelectedTask]   = useState(null)
+  const [createModal, setCreateModal]     = useState(null)
+  const [editingProject, setEditingProject] = useState(false)
+  const [projectForm, setProjectForm]     = useState({})
+  const [filter, setFilter]               = useState({
     priority: '', search: '', assigned_to: '', due_date_from: '', due_date_to: ''
   })
-  const [members, setMembers]           = useState([])
-  const [showFilters, setShowFilters]   = useState(false)
-  const [showActivity, setShowActivity] = useState(false)
-  const [liveAlert, setLiveAlert]       = useState(null)
-  const alertTimeout                    = useRef(null)
+  const [members, setMembers]             = useState([])
+  const [showFilters, setShowFilters]     = useState(false)
+  const [showActivity, setShowActivity]   = useState(false)
+  const [liveAlert, setLiveAlert]         = useState(null)
+  const alertTimeout                      = useRef(null)
 
   useEffect(() => { fetchData() }, [id])
 
-  // ── Fetch all data ─────────────────────────────────────
+  // ── Fetch all data ──────────────────────────────────────
   const fetchData = async () => {
     try {
       const [projRes, tasksRes, logsRes] = await Promise.all([
@@ -44,15 +46,11 @@ export default function BoardPage() {
       setProject(projRes.data.project)
       setTasks(tasksRes.data.tasks)
       setActivityLogs(logsRes.data.logs)
-
-      // Fetch team members for assignee filter
       if (projRes.data.project?.team_id) {
         try {
           const teamRes = await api.get(`/teams/${projRes.data.project.team_id}`)
           setMembers(teamRes.data.team?.members || [])
-        } catch (err) {
-          console.error('Failed to fetch members:', err)
-        }
+        } catch (err) { console.error('Failed to fetch members:', err) }
       }
     } catch (err) {
       console.error(err)
@@ -65,16 +63,13 @@ export default function BoardPage() {
     try {
       const res = await api.get(`/tasks/project/${id}`)
       setTasks(res.data.tasks)
-    } catch (err) {
-      console.error(err)
-    }
+    } catch (err) { console.error(err) }
   }
 
-  // ── Socket.io Real-time ────────────────────────────────
+  // ── Socket.io Real-time ─────────────────────────────────
   useEffect(() => {
     if (!socket) return
     socket.emit('join_project', id)
-
     socket.on('task_created', (data) => {
       showAlert(`📋 New task created: "${data.title}"`)
       fetchTasks()
@@ -89,10 +84,7 @@ export default function BoardPage() {
       setTasks(prev => prev.filter(t => t.id !== parseInt(data.task_id)))
       showAlert('🗑 A task was deleted')
     })
-    socket.on('comment_added', () => {
-      showAlert('💬 New comment on a task')
-    })
-
+    socket.on('comment_added', () => { showAlert('💬 New comment on a task') })
     return () => {
       socket.off('task_created')
       socket.off('task_updated')
@@ -107,7 +99,7 @@ export default function BoardPage() {
     alertTimeout.current = setTimeout(() => setLiveAlert(null), 4000)
   }
 
-  // ── Filtering ──────────────────────────────────────────
+  // ── Filtering ───────────────────────────────────────────
   const filteredTasks = tasks.filter(t => {
     if (filter.priority && t.priority !== filter.priority) return false
     if (filter.assigned_to && String(t.assigned_to) !== String(filter.assigned_to)) return false
@@ -121,13 +113,12 @@ export default function BoardPage() {
 
   const getTasksByStatus = (status) => filteredTasks.filter(t => t.status === status)
 
-  // ── Drag & Drop ────────────────────────────────────────
+  // ── Drag & Drop ─────────────────────────────────────────
   const onDragEnd = async (result) => {
     const { destination, source, draggableId } = result
     if (!destination) return
     if (destination.droppableId === source.droppableId &&
         destination.index === source.index) return
-
     const newStatus = destination.droppableId
     setTasks(prev => prev.map(t =>
       t.id === parseInt(draggableId) ? { ...t, status: newStatus } : t
@@ -136,10 +127,7 @@ export default function BoardPage() {
       await api.patch(`/tasks/${draggableId}`, { status: newStatus })
       socket?.emit('task_moved', { task_id: draggableId, status: newStatus, project_id: id })
       fetchData()
-    } catch (err) {
-      console.error(err)
-      fetchData()
-    }
+    } catch (err) { console.error(err); fetchData() }
   }
 
   const handleTaskClick = async (task) => {
@@ -183,7 +171,7 @@ export default function BoardPage() {
         <div className="max-w-full mx-auto px-6">
           <div className="flex justify-between items-center h-16">
 
-            {/* Left — Project Info */}
+            {/* Left */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate('/dashboard')}
@@ -203,7 +191,7 @@ export default function BoardPage() {
               </div>
             </div>
 
-            {/* Right — Controls */}
+            {/* Right */}
             <div className="flex items-center gap-2">
 
               {/* Filter Toggle */}
@@ -216,18 +204,14 @@ export default function BoardPage() {
                 }`}
               >
                 🔽 Filters
-                {hasActiveFilters && (
-                  <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
-                )}
+                {hasActiveFilters && <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>}
               </button>
 
               {/* Activity Feed */}
               <button
                 onClick={() => setShowActivity(!showActivity)}
                 className={`flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition ${
-                  showActivity
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  showActivity ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 📜 Activity
@@ -249,6 +233,24 @@ export default function BoardPage() {
                 {project?.status}
               </span>
 
+              {/* Edit Project Button */}
+              {(user?.role === 'admin' || user?.role === 'manager') && (
+                <button
+                  onClick={() => {
+                    setProjectForm({
+                      name: project?.name || '',
+                      description: project?.description || '',
+                      status: project?.status || 'active',
+                      end_date: project?.end_date ? project.end_date.split('T')[0] : '',
+                    })
+                    setEditingProject(true)
+                  }}
+                  className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold px-3 py-1.5 rounded-xl transition"
+                >
+                  ✏️ Edit
+                </button>
+              )}
+
               {/* Archive Button */}
               {(user?.role === 'admin' || user?.role === 'manager') && project?.status === 'active' && (
                 <button
@@ -257,9 +259,7 @@ export default function BoardPage() {
                     try {
                       await api.patch(`/projects/${id}/archive`)
                       fetchData()
-                    } catch (err) {
-                      console.error(err)
-                    }
+                    } catch (err) { console.error(err) }
                   }}
                   className="text-xs bg-amber-50 text-amber-600 hover:bg-amber-100 font-semibold px-3 py-1.5 rounded-xl transition"
                 >
@@ -281,8 +281,6 @@ export default function BoardPage() {
       {showFilters && (
         <div className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm">
           <div className="flex flex-wrap gap-3 items-end">
-
-            {/* Search */}
             <div>
               <label className="block text-xs font-semibold text-gray-400 mb-1">Search</label>
               <input
@@ -293,8 +291,6 @@ export default function BoardPage() {
                 className="text-sm px-3 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 w-44 transition"
               />
             </div>
-
-            {/* Priority */}
             <div>
               <label className="block text-xs font-semibold text-gray-400 mb-1">Priority</label>
               <select
@@ -309,8 +305,6 @@ export default function BoardPage() {
                 <option value="critical">Critical</option>
               </select>
             </div>
-
-            {/* Assignee */}
             <div>
               <label className="block text-xs font-semibold text-gray-400 mb-1">Assignee</label>
               <select
@@ -324,8 +318,6 @@ export default function BoardPage() {
                 ))}
               </select>
             </div>
-
-            {/* Due Date From */}
             <div>
               <label className="block text-xs font-semibold text-gray-400 mb-1">Due From</label>
               <input
@@ -335,8 +327,6 @@ export default function BoardPage() {
                 className="text-sm px-3 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition"
               />
             </div>
-
-            {/* Due Date To */}
             <div>
               <label className="block text-xs font-semibold text-gray-400 mb-1">Due To</label>
               <input
@@ -346,22 +336,18 @@ export default function BoardPage() {
                 className="text-sm px-3 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition"
               />
             </div>
-
-            {/* Clear Filters */}
             {hasActiveFilters && (
-              <button
-                onClick={() => setFilter({ priority: '', search: '', assigned_to: '', due_date_from: '', due_date_to: '' })}
-                className="text-sm text-red-400 hover:text-red-600 font-semibold px-3 py-2 rounded-xl hover:bg-red-50 transition"
-              >
-                ✕ Clear All
-              </button>
-            )}
-
-            {/* Active filter count */}
-            {hasActiveFilters && (
-              <span className="text-xs bg-blue-100 text-blue-600 px-3 py-2 rounded-xl font-semibold">
-                {filteredTasks.length} of {tasks.length} tasks shown
-              </span>
+              <>
+                <button
+                  onClick={() => setFilter({ priority: '', search: '', assigned_to: '', due_date_from: '', due_date_to: '' })}
+                  className="text-sm text-red-400 hover:text-red-600 font-semibold px-3 py-2 rounded-xl hover:bg-red-50 transition"
+                >
+                  ✕ Clear All
+                </button>
+                <span className="text-xs bg-blue-100 text-blue-600 px-3 py-2 rounded-xl font-semibold">
+                  {filteredTasks.length} of {tasks.length} tasks shown
+                </span>
+              </>
             )}
           </div>
         </div>
@@ -391,12 +377,7 @@ export default function BoardPage() {
           <div className="fixed right-0 top-16 bottom-0 w-80 bg-white border-l border-gray-200 shadow-xl z-20 flex flex-col">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-bold text-gray-800">📜 Activity Feed</h3>
-              <button
-                onClick={() => setShowActivity(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl"
-              >
-                ×
-              </button>
+              <button onClick={() => setShowActivity(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {activityLogs.length === 0 ? (
@@ -410,9 +391,7 @@ export default function BoardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-700">{log.user_name}</p>
                       <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{log.details}</p>
-                      <p className="text-xs text-gray-300 mt-1">
-                        {new Date(log.created_at).toLocaleString()}
-                      </p>
+                      <p className="text-xs text-gray-300 mt-1">{new Date(log.created_at).toLocaleString()}</p>
                     </div>
                   </div>
                 ))
@@ -421,6 +400,81 @@ export default function BoardPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Project Modal */}
+      {editingProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-bold text-gray-800">✏️ Edit Project</h2>
+              <button onClick={() => setEditingProject(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Project Name</label>
+                <input
+                  type="text"
+                  value={projectForm.name}
+                  onChange={e => setProjectForm({...projectForm, name: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={projectForm.description}
+                  onChange={e => setProjectForm({...projectForm, description: e.target.value})}
+                  rows={3}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Status</label>
+                  <select
+                    value={projectForm.status}
+                    onChange={e => setProjectForm({...projectForm, status: e.target.value})}
+                    className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="active">Active</option>
+                    <option value="on_hold">On Hold</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={projectForm.end_date}
+                    onChange={e => setProjectForm({...projectForm, end_date: e.target.value})}
+                    className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditingProject(false)}
+                className="flex-1 py-3 border-2 border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await api.put(`/projects/${id}`, projectForm)
+                    fetchData()
+                    setEditingProject(false)
+                  } catch (err) { console.error(err) }
+                }}
+                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold hover:from-blue-700 hover:to-indigo-700 transition"
+              >
+                💾 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Task Detail Modal */}
       {selectedTask && (

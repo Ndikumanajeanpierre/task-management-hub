@@ -285,5 +285,22 @@ const getAttachments = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error.' })
   }
 }
+// MARK notifications as read
+const markNotificationsRead = async (req, res) => {
+  try {
+    await db.query(
+      'UPDATE notifications SET is_read = TRUE WHERE user_id = ?',
+      [req.user.id]
+    )
+    return res.status(200).json({ success: true, message: 'Notifications marked as read.' })
+  } catch (error) {
+    console.error('MarkNotificationsRead error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
+  }
+}
 
-module.exports = { createTask, getTasksByProject, getTaskById, updateTask, deleteTask, addComment, getNotifications, uploadAttachment, getAttachments }
+module.exports = {
+  createTask, getTasksByProject, getTaskById, updateTask,
+  deleteTask, addComment, getNotifications,
+  uploadAttachment, getAttachments, markNotificationsRead
+}

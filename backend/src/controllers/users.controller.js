@@ -1,6 +1,5 @@
 const db = require('../config/db');
 
-// GET all users (Admin only)
 const getAllUsers = async (req, res) => {
   try {
     const [users] = await db.query(
@@ -13,7 +12,6 @@ const getAllUsers = async (req, res) => {
   }
 };
 
-// GET single user by ID
 const getUserById = async (req, res) => {
   try {
     const [users] = await db.query(
@@ -30,7 +28,48 @@ const getUserById = async (req, res) => {
   }
 };
 
-// UPDATE user role (Admin only)
+const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email } = req.body;
+
+    if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden.' });
+    }
+
+    if (!name || !email) {
+      return res.status(400).json({ success: false, message: 'Name and email are required.' });
+    }
+
+    const [existing] = await db.query(
+      'SELECT id FROM users WHERE email = ? AND id != ?',
+      [email, id]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, message: 'Email already in use.' });
+    }
+
+    await db.query(
+      'UPDATE users SET name = ?, email = ? WHERE id = ?',
+      [name, email, id]
+    );
+
+    const [rows] = await db.query(
+      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: rows[0]
+    });
+  } catch (error) {
+    console.error('UpdateUser error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
 const updateUserRole = async (req, res) => {
   try {
     const { role } = req.body;
@@ -55,7 +94,6 @@ const updateUserRole = async (req, res) => {
   }
 };
 
-// DELETE user (Admin only)
 const deleteUser = async (req, res) => {
   try {
     if (req.user.id === parseInt(req.params.id)) {
@@ -64,6 +102,12 @@ const deleteUser = async (req, res) => {
         message: 'You cannot delete your own account.'
       });
     }
+
+    const [users] = await db.query('SELECT id FROM users WHERE id = ?', [req.params.id]);
+    if (users.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
     await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
     return res.status(200).json({ success: true, message: 'User deleted.' });
   } catch (error) {
@@ -72,4 +116,4 @@ const deleteUser = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, getUserById, updateUserRole, deleteUser };
+module.exports = { getAllUsers, getUserById, updateUser, updateUserRole, deleteUser };

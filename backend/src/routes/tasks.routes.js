@@ -5,7 +5,8 @@ const path = require('path')
 const {
   createTask, getTasksByProject, getTaskById,
   updateTask, deleteTask, addComment,
-  getNotifications, uploadAttachment, getAttachments
+  getNotifications, uploadAttachment,
+  getAttachments, markNotificationsRead
 } = require('../controllers/tasks.controller')
 const { auth } = require('../middleware/auth')
 
@@ -32,6 +33,7 @@ const upload = multer({
 router.post('/', auth, createTask)
 router.get('/project/:projectId', auth, getTasksByProject)
 router.get('/notifications', auth, getNotifications)
+router.patch('/notifications/read', auth, markNotificationsRead)
 router.get('/:id', auth, getTaskById)
 router.patch('/:id', auth, updateTask)
 router.delete('/:id', auth, deleteTask)
