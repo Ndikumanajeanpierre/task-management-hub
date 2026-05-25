@@ -9,6 +9,10 @@ import CreateTeamPage from './pages/CreateTeamPage'
 import TeamsPage from './pages/TeamsPage'
 import AdminPage from './pages/AdminPage'
 import ProfilePage from './pages/ProfilePage'
+import TasksPage from './pages/TasksPage'
+import CalendarPage from './pages/CalendarPage'
+import ReportsPage from './pages/ReportsPage'
+import ProjectsPage from './pages/ProjectsPage'
 
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth()
@@ -26,14 +30,27 @@ export default function App() {
       <Route path="/" element={<Navigate to="/dashboard" />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+
       <Route path="/dashboard" element={
         <ProtectedRoute><DashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/projects" element={
+        <ProtectedRoute><ProjectsPage /></ProtectedRoute>
       } />
       <Route path="/projects/new" element={
         <ProtectedRoute><CreateProjectPage /></ProtectedRoute>
       } />
       <Route path="/projects/:id" element={
         <ProtectedRoute><BoardPage /></ProtectedRoute>
+      } />
+      <Route path="/tasks" element={
+        <ProtectedRoute><TasksPage /></ProtectedRoute>
+      } />
+      <Route path="/calendar" element={
+        <ProtectedRoute><CalendarPage /></ProtectedRoute>
+      } />
+      <Route path="/reports" element={
+        <ProtectedRoute><ReportsPage /></ProtectedRoute>
       } />
       <Route path="/teams" element={
         <ProtectedRoute><TeamsPage /></ProtectedRoute>
