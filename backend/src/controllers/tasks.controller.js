@@ -8,20 +8,18 @@ const createTask = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Title and project are required.' });
     }
 
-   const [result] = await db.query(
-  `INSERT INTO tasks (title, description, project_id, assigned_to, created_by, priority, due_date, status, labels)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  [title, description || null, project_id, assigned_to || null, req.user.id,
-   priority || 'medium', due_date || null, status || 'todo', labels || null]
-);
+    const [result] = await db.query(
+      `INSERT INTO tasks (title, description, project_id, assigned_to, created_by, priority, due_date, status, labels)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [title, description || null, project_id, assigned_to || null, req.user.id,
+       priority || 'medium', due_date || null, status || 'todo', labels || null]
+    );
 
-    // Log activity
     await db.query(
       'INSERT INTO activity_logs (user_id, project_id, task_id, action, details) VALUES (?, ?, ?, ?, ?)',
       [req.user.id, project_id, result.insertId, 'task_created', `Task "${title}" was created`]
     );
 
-    // Send notification if task is assigned
     if (assigned_to) {
       await db.query(
         'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
@@ -29,7 +27,6 @@ const createTask = async (req, res) => {
       );
     }
 
-    // Emit real-time event
     const io = req.app.get('io');
     io.to(`project_${project_id}`).emit('task_created', {
       task_id: result.insertId, title, project_id
@@ -46,35 +43,35 @@ const createTask = async (req, res) => {
   }
 };
 
-// GET all tasks for a project// GET all tasks for a project
+// GET all tasks for a project
 const getTasksByProject = async (req, res) => {
   try {
-    const { status, priority, assigned_to, due_date_from, due_date_to, search } = req.query
+    const { status, priority, assigned_to, due_date_from, due_date_to, search } = req.query;
     let query = `
       SELECT t.*, u.name AS assigned_to_name, c.name AS created_by_name
       FROM tasks t
       LEFT JOIN users u ON t.assigned_to = u.id
       LEFT JOIN users c ON t.created_by = c.id
       WHERE t.project_id = ?
-    `
-    const params = [req.params.projectId]
+    `;
+    const params = [req.params.projectId];
 
-    if (status) { query += ' AND t.status = ?'; params.push(status) }
-    if (priority) { query += ' AND t.priority = ?'; params.push(priority) }
-    if (assigned_to) { query += ' AND t.assigned_to = ?'; params.push(assigned_to) }
-    if (due_date_from) { query += ' AND t.due_date >= ?'; params.push(due_date_from) }
-    if (due_date_to) { query += ' AND t.due_date <= ?'; params.push(due_date_to) }
-    if (search) { query += ' AND (t.title LIKE ? OR t.description LIKE ?)'; params.push(`%${search}%`, `%${search}%`) }
+    if (status)        { query += ' AND t.status = ?';                                    params.push(status); }
+    if (priority)      { query += ' AND t.priority = ?';                                  params.push(priority); }
+    if (assigned_to)   { query += ' AND t.assigned_to = ?';                               params.push(assigned_to); }
+    if (due_date_from) { query += ' AND t.due_date >= ?';                                 params.push(due_date_from); }
+    if (due_date_to)   { query += ' AND t.due_date <= ?';                                 params.push(due_date_to); }
+    if (search)        { query += ' AND (t.title LIKE ? OR t.description LIKE ?)';        params.push(`%${search}%`, `%${search}%`); }
 
-    query += ' ORDER BY t.position ASC, t.created_at DESC'
+    query += ' ORDER BY t.position ASC, t.created_at DESC';
 
-    const [tasks] = await db.query(query, params)
-    return res.status(200).json({ success: true, tasks })
+    const [tasks] = await db.query(query, params);
+    return res.status(200).json({ success: true, tasks });
   } catch (error) {
-    console.error('GetTasksByProject error:', error.message)
-    return res.status(500).json({ success: false, message: 'Server error.' })
+    console.error('GetTasksByProject error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
-}
+};
 
 // GET single task
 const getTaskById = async (req, res) => {
@@ -91,7 +88,6 @@ const getTaskById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
-    // Get comments
     const [comments] = await db.query(`
       SELECT cm.*, u.name AS user_name
       FROM comments cm
@@ -110,7 +106,7 @@ const getTaskById = async (req, res) => {
   }
 };
 
-// UPDATE task (including drag & drop status change)
+// UPDATE task
 const updateTask = async (req, res) => {
   try {
     const { title, description, assigned_to, priority, due_date, status, position } = req.body;
@@ -133,7 +129,6 @@ const updateTask = async (req, res) => {
       [title, description, assigned_to, priority, due_date, status, position, req.params.id]
     );
 
-    // Log status change
     if (status && status !== existing[0].status) {
       await db.query(
         'INSERT INTO activity_logs (user_id, project_id, task_id, action, details) VALUES (?, ?, ?, ?, ?)',
@@ -141,7 +136,6 @@ const updateTask = async (req, res) => {
          `Task "${existing[0].title}" moved to ${status}`]
       );
 
-      // Notify assigned user
       if (existing[0].assigned_to) {
         await db.query(
           'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
@@ -151,7 +145,6 @@ const updateTask = async (req, res) => {
       }
     }
 
-    // Emit real-time event
     const io = req.app.get('io');
     io.to(`project_${existing[0].project_id}`).emit('task_updated', {
       task_id: req.params.id, status, position
@@ -174,7 +167,6 @@ const deleteTask = async (req, res) => {
 
     await db.query('DELETE FROM tasks WHERE id = ?', [req.params.id]);
 
-    // Emit real-time event
     const io = req.app.get('io');
     io.to(`project_${existing[0].project_id}`).emit('task_deleted', {
       task_id: req.params.id, project_id: existing[0].project_id
@@ -187,7 +179,7 @@ const deleteTask = async (req, res) => {
   }
 };
 
-// ADD comment to task
+// ADD comment
 const addComment = async (req, res) => {
   try {
     const { content } = req.body;
@@ -205,7 +197,6 @@ const addComment = async (req, res) => {
       [req.params.id, req.user.id, content]
     );
 
-    // Emit real-time event
     const io = req.app.get('io');
     io.to(`project_${task[0].project_id}`).emit('comment_added', {
       task_id: req.params.id,
@@ -223,7 +214,7 @@ const addComment = async (req, res) => {
   }
 };
 
-// GET notifications for logged in user
+// GET notifications
 const getNotifications = async (req, res) => {
   try {
     const [notifications] = await db.query(
@@ -236,22 +227,23 @@ const getNotifications = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
+
 // UPLOAD attachment
 const uploadAttachment = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded.' })
+      return res.status(400).json({ success: false, message: 'No file uploaded.' });
     }
 
-    const [task] = await db.query('SELECT * FROM tasks WHERE id = ?', [req.params.id])
+    const [task] = await db.query('SELECT * FROM tasks WHERE id = ?', [req.params.id]);
     if (task.length === 0) {
-      return res.status(404).json({ success: false, message: 'Task not found.' })
+      return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
     const [result] = await db.query(
       'INSERT INTO attachments (task_id, uploaded_by, file_name, file_path, file_size) VALUES (?, ?, ?, ?, ?)',
       [req.params.id, req.user.id, req.file.originalname, req.file.path, req.file.size]
-    )
+    );
 
     return res.status(201).json({
       success: true,
@@ -261,14 +253,14 @@ const uploadAttachment = async (req, res) => {
         file_name: req.file.originalname,
         file_size: req.file.size,
       }
-    })
+    });
   } catch (error) {
-    console.error('UploadAttachment error:', error.message)
-    return res.status(500).json({ success: false, message: 'Server error.' })
+    console.error('UploadAttachment error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
-}
+};
 
-// GET attachments for a task
+// GET attachments
 const getAttachments = async (req, res) => {
   try {
     const [attachments] = await db.query(
@@ -278,29 +270,60 @@ const getAttachments = async (req, res) => {
        WHERE a.task_id = ?
        ORDER BY a.uploaded_at DESC`,
       [req.params.id]
-    )
-    return res.status(200).json({ success: true, attachments })
+    );
+    return res.status(200).json({ success: true, attachments });
   } catch (error) {
-    console.error('GetAttachments error:', error.message)
-    return res.status(500).json({ success: false, message: 'Server error.' })
+    console.error('GetAttachments error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
-}
+};
+
 // MARK notifications as read
 const markNotificationsRead = async (req, res) => {
   try {
     await db.query(
       'UPDATE notifications SET is_read = TRUE WHERE user_id = ?',
       [req.user.id]
-    )
-    return res.status(200).json({ success: true, message: 'Notifications marked as read.' })
+    );
+    return res.status(200).json({ success: true, message: 'Notifications marked as read.' });
   } catch (error) {
-    console.error('MarkNotificationsRead error:', error.message)
-    return res.status(500).json({ success: false, message: 'Server error.' })
+    console.error('MarkNotificationsRead error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
-}
+};
+
+// GET tasks assigned to logged-in user
+const getMyTasks = async (req, res) => {
+  try {
+    const [tasks] = await db.query(
+      `SELECT
+        t.*,
+        p.name AS project_name,
+        u.name AS assignee_name
+       FROM tasks t
+       LEFT JOIN projects p ON t.project_id = p.id
+       LEFT JOIN users u ON t.assigned_to = u.id
+       WHERE t.assigned_to = ?
+       ORDER BY t.due_date ASC, t.created_at DESC`,
+      [req.user.id]
+    );
+    return res.status(200).json({ success: true, tasks });
+  } catch (error) {
+    console.error('GetMyTasks error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
 
 module.exports = {
-  createTask, getTasksByProject, getTaskById, updateTask,
-  deleteTask, addComment, getNotifications,
-  uploadAttachment, getAttachments, markNotificationsRead
-}
+  createTask,
+  getTasksByProject,
+  getTaskById,
+  updateTask,
+  deleteTask,
+  addComment,
+  getNotifications,
+  uploadAttachment,
+  getAttachments,
+  markNotificationsRead,
+  getMyTasks
+};

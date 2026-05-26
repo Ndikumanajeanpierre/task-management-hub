@@ -17,71 +17,6 @@ const STATUS_STYLE = {
   done:        { bg: '#f0fdf4', text: '#16a34a', label: 'Done' },
 }
 
-function Sidebar({ user, projects, totalTasks, location, navigate, logout }) {
-  return (
-    <aside className="w-[260px] shrink-0 flex flex-col" style={{ backgroundColor: '#1a2235' }}>
-      <div className="flex items-center gap-3 px-6 py-5">
-        <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold">T</div>
-        <span className="text-[16px] font-semibold text-white">Task Hub</span>
-      </div>
-      <div className="flex-1 px-3 py-2">
-        <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
-        {[
-          { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects },
-          { to: '/projects',  icon: 'ti-folder',           label: 'Projects',  count: projects },
-          { to: '/tasks',     icon: 'ti-checklist',         label: 'My Tasks',  count: totalTasks },
-          { to: '/calendar',  icon: 'ti-calendar',          label: 'Calendar' },
-        ].map(item => {
-          const active = location.pathname === item.to
-          return (
-            <Link key={item.to} to={item.to}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
-              style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
-              <i className={`ti ${item.icon} text-base`} />
-              <span className="flex-1 font-medium">{item.label}</span>
-              {item.count !== undefined && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                  style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
-                  {item.count}
-                </span>
-              )}
-            </Link>
-          )
-        })}
-        <p className="px-3 py-2 mt-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
-        {[
-          { to: '/teams',   icon: 'ti-users',    label: 'Teams' },
-          { to: '/reports', icon: 'ti-chart-bar', label: 'Reports' },
-          ...(user?.role === 'admin' ? [{ to: '/admin', icon: 'ti-settings', label: 'Settings' }] : []),
-        ].map(item => (
-          <Link key={item.to} to={item.to}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
-            style={{ color: '#8b9ab8' }}>
-            <i className={`ti ${item.icon} text-base`} />
-            <span className="font-medium">{item.label}</span>
-          </Link>
-        ))}
-      </div>
-      <div className="px-3 pb-4 pt-2" style={{ borderTop: '1px solid #253047' }}>
-        <div onClick={() => navigate('/profile')}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition">
-          <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-white truncate">{user?.name}</p>
-            <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
-          </div>
-          <button onClick={(e) => { e.stopPropagation(); logout(); navigate('/login') }}
-            className="text-sm transition" style={{ color: '#6b7a99' }}>
-            <i className="ti ti-logout" />
-          </button>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
 export default function TasksPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -105,11 +40,8 @@ export default function TasksPage() {
       ])
       setTasks(tasksRes.data.tasks || [])
       setProjects(projRes.data.projects || [])
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
+    } catch (err) { console.error(err) }
+    finally { setLoading(false) }
   }
 
   const handleStatusChange = async (taskId, newStatus) => {
@@ -152,8 +84,69 @@ export default function TasksPage() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar user={user} projects={projects.length} totalTasks={totalTasks}
-        location={location} navigate={navigate} logout={logout} />
+      <aside className="w-[260px] shrink-0 flex flex-col" style={{ backgroundColor: '#1a2235' }}>
+        <div className="flex items-center gap-3 px-6 py-5">
+          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold">T</div>
+          <span className="text-[16px] font-semibold text-white">Task Hub</span>
+        </div>
+        <div className="flex-1 px-3 py-2">
+          <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
+          {[
+            { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects.length },
+            { to: '/projects',  icon: 'ti-folder',           label: 'Projects',  count: projects.length },
+            { to: '/tasks',     icon: 'ti-checklist',         label: 'My Tasks',  count: totalTasks },
+            { to: '/calendar',  icon: 'ti-calendar',          label: 'Calendar' },
+          ].map(item => {
+            const active = location.pathname === item.to
+            return (
+              <Link key={item.to} to={item.to}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
+                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
+                <i className={`ti ${item.icon} text-base`} />
+                <span className="flex-1 font-medium">{item.label}</span>
+                {item.count !== undefined && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
+                    {item.count}
+                  </span>
+                )}
+              </Link>
+            )
+          })}
+          <p className="px-3 py-2 mt-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
+          {[
+            { to: '/teams', icon: 'ti-users', label: 'Teams' },
+            ...(user?.role === 'admin' ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }] : []),
+            ...(user?.role === 'admin' ? [{ to: '/admin',   icon: 'ti-settings',  label: 'Settings' }] : []),
+          ].map(item => {
+            const active = location.pathname === item.to
+            return (
+              <Link key={item.to} to={item.to}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
+                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
+                <i className={`ti ${item.icon} text-base`} />
+                <span className="font-medium">{item.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+        <div className="px-3 pb-4 pt-2" style={{ borderTop: '1px solid #253047' }}>
+          <div onClick={() => navigate('/profile')}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition">
+            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-medium text-white truncate">{user?.name}</p>
+              <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); logout(); navigate('/login') }}
+              className="text-sm transition" style={{ color: '#6b7a99' }}>
+              <i className="ti ti-logout" />
+            </button>
+          </div>
+        </div>
+      </aside>
 
       <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: '#f3f4f8' }}>
         <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
@@ -178,16 +171,14 @@ export default function TasksPage() {
         </header>
 
         <main className="flex-1 p-8">
-          {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             {[
-              { label: 'Total tasks',  value: tasks.length,        icon: 'ti-checklist',       color: '#2563eb', bg: '#eff6ff' },
-              { label: 'In progress',  value: counts.in_progress,  icon: 'ti-loader',           color: '#9333ea', bg: '#faf5ff' },
+              { label: 'Total tasks',  value: tasks.length,       icon: 'ti-checklist',      color: '#2563eb', bg: '#eff6ff' },
+              { label: 'In progress',  value: counts.in_progress, icon: 'ti-loader',          color: '#9333ea', bg: '#faf5ff' },
               { label: 'Due today',    value: tasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length, icon: 'ti-clock', color: '#ca8a04', bg: '#fefce8' },
-              { label: 'Overdue',      value: overdue,             icon: 'ti-alert-triangle',   color: '#dc2626', bg: '#fef2f2' },
+              { label: 'Overdue',      value: overdue,            icon: 'ti-alert-triangle',  color: '#dc2626', bg: '#fef2f2' },
             ].map((s, i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 flex items-center gap-4"
-                style={{ border: '1px solid #e8eaf0' }}>
+              <div key={i} className="bg-white rounded-2xl p-5 flex items-center gap-4" style={{ border: '1px solid #e8eaf0' }}>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
                   style={{ backgroundColor: s.bg, color: s.color }}>
                   <i className={`ti ${s.icon}`} />
@@ -200,7 +191,6 @@ export default function TasksPage() {
             ))}
           </div>
 
-          {/* Status tabs + priority filter */}
           <div className="flex gap-2 mb-6 flex-wrap">
             {[
               { key: 'all',         label: 'All' },
@@ -230,7 +220,6 @@ export default function TasksPage() {
             </div>
           </div>
 
-          {/* Task list */}
           {loading ? (
             <div className="space-y-3">
               {[1,2,3,4,5].map(i => (
@@ -264,10 +253,7 @@ export default function TasksPage() {
                     <button
                       onClick={() => handleStatusChange(task.id, task.status === 'done' ? 'todo' : 'done')}
                       className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition"
-                      style={{
-                        borderColor: task.status === 'done' ? '#22c55e' : '#d1d5db',
-                        backgroundColor: task.status === 'done' ? '#22c55e' : 'transparent',
-                      }}>
+                      style={{ borderColor: task.status === 'done' ? '#22c55e' : '#d1d5db', backgroundColor: task.status === 'done' ? '#22c55e' : 'transparent' }}>
                       {task.status === 'done' && <i className="ti ti-check text-white" style={{ fontSize: 10 }} />}
                     </button>
                     <div className="flex-1 min-w-0">

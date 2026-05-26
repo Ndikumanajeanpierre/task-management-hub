@@ -13,71 +13,6 @@ const PRIORITY_COLOR = {
   low:      '#16a34a',
 }
 
-function Sidebar({ user, projects, totalTasks, location, navigate, logout }) {
-  return (
-    <aside className="w-[260px] shrink-0 flex flex-col" style={{ backgroundColor: '#1a2235' }}>
-      <div className="flex items-center gap-3 px-6 py-5">
-        <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold">T</div>
-        <span className="text-[16px] font-semibold text-white">Task Hub</span>
-      </div>
-      <div className="flex-1 px-3 py-2">
-        <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
-        {[
-          { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects },
-          { to: '/projects',  icon: 'ti-folder',           label: 'Projects',  count: projects },
-          { to: '/tasks',     icon: 'ti-checklist',         label: 'My Tasks',  count: totalTasks },
-          { to: '/calendar',  icon: 'ti-calendar',          label: 'Calendar' },
-        ].map(item => {
-          const active = location.pathname === item.to
-          return (
-            <Link key={item.to} to={item.to}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
-              style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
-              <i className={`ti ${item.icon} text-base`} />
-              <span className="flex-1 font-medium">{item.label}</span>
-              {item.count !== undefined && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                  style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
-                  {item.count}
-                </span>
-              )}
-            </Link>
-          )
-        })}
-        <p className="px-3 py-2 mt-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
-        {[
-          { to: '/teams',   icon: 'ti-users',    label: 'Teams' },
-          { to: '/reports', icon: 'ti-chart-bar', label: 'Reports' },
-          ...(user?.role === 'admin' ? [{ to: '/admin', icon: 'ti-settings', label: 'Settings' }] : []),
-        ].map(item => (
-          <Link key={item.to} to={item.to}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
-            style={{ color: '#8b9ab8' }}>
-            <i className={`ti ${item.icon} text-base`} />
-            <span className="font-medium">{item.label}</span>
-          </Link>
-        ))}
-      </div>
-      <div className="px-3 pb-4 pt-2" style={{ borderTop: '1px solid #253047' }}>
-        <div onClick={() => navigate('/profile')}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer">
-          <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-white truncate">{user?.name}</p>
-            <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
-          </div>
-          <button onClick={(e) => { e.stopPropagation(); logout(); navigate('/login') }}
-            style={{ color: '#6b7a99' }}>
-            <i className="ti ti-logout text-sm" />
-          </button>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
 export default function CalendarPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -104,12 +39,11 @@ export default function CalendarPage() {
     finally { setLoading(false) }
   }
 
-  const totalTasks = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
-
-  const year  = current.getFullYear()
-  const month = current.getMonth()
-  const firstDay    = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const totalTasks    = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
+  const year          = current.getFullYear()
+  const month         = current.getMonth()
+  const firstDay      = new Date(year, month, 1).getDay()
+  const daysInMonth   = new Date(year, month + 1, 0).getDate()
   const prevMonthDays = new Date(year, month, 0).getDate()
 
   const getTasksForDate = (d) => {
@@ -140,8 +74,67 @@ export default function CalendarPage() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar user={user} projects={projects.length} totalTasks={totalTasks}
-        location={location} navigate={navigate} logout={logout} />
+      <aside className="w-[260px] shrink-0 flex flex-col" style={{ backgroundColor: '#1a2235' }}>
+        <div className="flex items-center gap-3 px-6 py-5">
+          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold">T</div>
+          <span className="text-[16px] font-semibold text-white">Task Hub</span>
+        </div>
+        <div className="flex-1 px-3 py-2">
+          <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
+          {[
+            { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects.length },
+            { to: '/projects',  icon: 'ti-folder',           label: 'Projects',  count: projects.length },
+            { to: '/tasks',     icon: 'ti-checklist',         label: 'My Tasks',  count: totalTasks },
+            { to: '/calendar',  icon: 'ti-calendar',          label: 'Calendar' },
+          ].map(item => {
+            const active = location.pathname === item.to
+            return (
+              <Link key={item.to} to={item.to}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
+                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
+                <i className={`ti ${item.icon} text-base`} />
+                <span className="flex-1 font-medium">{item.label}</span>
+                {item.count !== undefined && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
+                    {item.count}
+                  </span>
+                )}
+              </Link>
+            )
+          })}
+          <p className="px-3 py-2 mt-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
+          {[
+            { to: '/teams', icon: 'ti-users', label: 'Teams' },
+            ...(user?.role === 'admin' ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }] : []),
+            ...(user?.role === 'admin' ? [{ to: '/admin',   icon: 'ti-settings',  label: 'Settings' }] : []),
+          ].map(item => {
+            const active = location.pathname === item.to
+            return (
+              <Link key={item.to} to={item.to}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
+                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
+                <i className={`ti ${item.icon} text-base`} />
+                <span className="font-medium">{item.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+        <div className="px-3 pb-4 pt-2" style={{ borderTop: '1px solid #253047' }}>
+          <div onClick={() => navigate('/profile')} className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer">
+            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-medium text-white truncate">{user?.name}</p>
+              <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); logout(); navigate('/login') }} style={{ color: '#6b7a99' }}>
+              <i className="ti ti-logout text-sm" />
+            </button>
+          </div>
+        </div>
+      </aside>
 
       <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: '#f3f4f8' }}>
         <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
@@ -161,8 +154,7 @@ export default function CalendarPage() {
               style={{ borderColor: '#e8eaf0' }}>
               <i className="ti ti-chevron-right text-sm" />
             </button>
-            <button
-              onClick={() => { setCurrent(new Date()); setSelected(today.getDate()) }}
+            <button onClick={() => { setCurrent(new Date()); setSelected(today.getDate()) }}
               className="px-3 py-1.5 text-[12px] font-semibold rounded-xl border transition hover:bg-gray-50"
               style={{ borderColor: '#e8eaf0', color: '#374151' }}>
               Today
@@ -171,7 +163,6 @@ export default function CalendarPage() {
         </header>
 
         <main className="flex-1 p-6 flex gap-6">
-          {/* Calendar grid */}
           <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #e8eaf0' }}>
             <div className="grid grid-cols-7" style={{ borderBottom: '1px solid #e8eaf0' }}>
               {DAYS.map(d => (
@@ -180,25 +171,20 @@ export default function CalendarPage() {
             </div>
             <div className="grid grid-cols-7" style={{ gridTemplateRows: 'repeat(6, minmax(100px, 1fr))' }}>
               {cells.map((cell, idx) => {
-                const dayTasks = cell.current ? getTasksForDate(cell.day) : []
-                const isToday    = cell.current && cell.day === today.getDate() && month === today.getMonth() && year === today.getFullYear()
+                const dayTasks  = cell.current ? getTasksForDate(cell.day) : []
+                const isToday   = cell.current && cell.day === today.getDate() && month === today.getMonth() && year === today.getFullYear()
                 const isSelected = cell.current && cell.day === selected
                 return (
                   <div key={idx}
                     onClick={() => cell.current && setSelected(cell.day === selected ? null : cell.day)}
                     className="p-2 cursor-pointer transition"
-                    style={{
-                      border: '0.5px solid #f0f1f5',
-                      backgroundColor: isSelected ? '#eff6ff' : 'transparent',
-                      opacity: cell.current ? 1 : 0.35,
-                    }}>
+                    style={{ border: '0.5px solid #f0f1f5', backgroundColor: isSelected ? '#eff6ff' : 'transparent', opacity: cell.current ? 1 : 0.35 }}>
                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold mb-1 ${isToday ? 'bg-blue-600 text-white' : 'text-gray-700'}`}>
                       {cell.day}
                     </div>
                     <div className="space-y-0.5">
                       {dayTasks.slice(0, 3).map(t => (
-                        <div key={t.id}
-                          className="text-[10px] px-1.5 py-0.5 rounded-md font-medium truncate"
+                        <div key={t.id} className="text-[10px] px-1.5 py-0.5 rounded-md font-medium truncate"
                           style={{
                             backgroundColor: (PRIORITY_COLOR[t.priority] || '#6b7280') + '18',
                             color: PRIORITY_COLOR[t.priority] || '#6b7280',
@@ -217,16 +203,13 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* Side panel */}
           <div className="w-72 shrink-0 flex flex-col gap-4">
             <div className="bg-white rounded-2xl p-5" style={{ border: '1px solid #e8eaf0' }}>
               <p className="text-[13px] font-bold text-gray-800 mb-4">
                 {selected ? `${MONTHS[month]} ${selected}` : 'Upcoming tasks'}
               </p>
               {loading ? (
-                <div className="space-y-2">
-                  {[1,2,3].map(i => <div key={i} className="h-12 bg-gray-50 rounded-xl animate-pulse" />)}
-                </div>
+                <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 bg-gray-50 rounded-xl animate-pulse" />)}</div>
               ) : (selected ? selectedTasks : upcomingTasks).length === 0 ? (
                 <div className="text-center py-8">
                   <i className="ti ti-calendar-off text-3xl text-gray-200 block mb-2" />

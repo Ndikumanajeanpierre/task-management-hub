@@ -115,5 +115,55 @@ const deleteUser = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
+// CHANGE PASSWORD
+const changePassword = async (req, res) => {
+  try {
+    const bcrypt = require('bcryptjs')
+    const { currentPassword, newPassword } = req.body
 
-module.exports = { getAllUsers, getUserById, updateUser, updateUserRole, deleteUser };
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Both passwords are required.' })
+    }
+
+    const [users] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id])
+    if (users.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' })
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, users[0].password_hash)
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect.' })
+    }
+
+    const salt = await bcrypt.genSalt(10)
+    const newHash = await bcrypt.hash(newPassword, salt)
+
+    await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, req.params.id])
+
+    return res.status(200).json({ success: true, message: 'Password changed successfully.' })
+  } catch (error) {
+    console.error('ChangePassword error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
+  }
+}
+
+// UPDATE user profile
+const updateProfile = async (req, res) => {
+  try {
+    const { name, email } = req.body
+    if (!name || !email) {
+      return res.status(400).json({ success: false, message: 'Name and email are required.' })
+    }
+
+    await db.query(
+      'UPDATE users SET name = ?, email = ? WHERE id = ?',
+      [name, email, req.params.id]
+    )
+
+    return res.status(200).json({ success: true, message: 'Profile updated successfully.' })
+  } catch (error) {
+    console.error('UpdateProfile error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
+  }
+}
+module.exports = { getAllUsers, getUserById, updateUserRole, deleteUser, changePassword, updateProfile }

@@ -13,6 +13,7 @@ import TasksPage from './pages/TasksPage'
 import CalendarPage from './pages/CalendarPage'
 import ReportsPage from './pages/ReportsPage'
 import ProjectsPage from './pages/ProjectsPage'
+import SettingsPage from './pages/SettingsPage'
 
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth()
@@ -64,6 +65,9 @@ export default function App() {
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>
       } />
+      <Route path="/settings" element={
+  <ProtectedRoute><SettingsPage /></ProtectedRoute>
+} />
     </Routes>
   )
 }
