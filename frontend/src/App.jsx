@@ -25,6 +25,18 @@ const ProtectedRoute = ({ children }) => {
   return token ? children : <Navigate to="/login" />
 }
 
+const RoleRoute = ({ children, allowedRoles }) => {
+  const { token, user, loading } = useAuth()
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-400">Loading...</div>
+    </div>
+  )
+  if (!token) return <Navigate to="/login" />
+  if (!allowedRoles.includes(user?.role)) return <Navigate to="/dashboard" />
+  return children
+}
+
 export default function App() {
   return (
     <Routes>
@@ -50,9 +62,12 @@ export default function App() {
       <Route path="/calendar" element={
         <ProtectedRoute><CalendarPage /></ProtectedRoute>
       } />
+
+      {/* Reports — admin and manager only, members get redirected to dashboard */}
       <Route path="/reports" element={
-        <ProtectedRoute><ReportsPage /></ProtectedRoute>
+        <RoleRoute allowedRoles={['admin', 'manager']}><ReportsPage /></RoleRoute>
       } />
+
       <Route path="/teams" element={
         <ProtectedRoute><TeamsPage /></ProtectedRoute>
       } />
@@ -66,8 +81,8 @@ export default function App() {
         <ProtectedRoute><ProfilePage /></ProtectedRoute>
       } />
       <Route path="/settings" element={
-  <ProtectedRoute><SettingsPage /></ProtectedRoute>
-} />
+        <ProtectedRoute><SettingsPage /></ProtectedRoute>
+      } />
     </Routes>
   )
 }

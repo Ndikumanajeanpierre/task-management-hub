@@ -17,31 +17,84 @@ const STATUS_STYLE = {
   done:        { bg: '#f0fdf4', text: '#16a34a', label: 'Done' },
 }
 
+const BellIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+)
+
+// Extracts tasks array from whatever shape the API returns
+const extractTasks = (data) => {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.tasks)) return data.tasks
+  if (Array.isArray(data.data)) return data.data
+  if (Array.isArray(data.items)) return data.items
+  if (Array.isArray(data.results)) return data.results
+  // last resort: find first array value in the object
+  const firstArr = Object.values(data).find(v => Array.isArray(v))
+  return firstArr || []
+}
+
 export default function TasksPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [tasks, setTasks]       = useState([])
-  const [projects, setProjects] = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [filter, setFilter]     = useState('all')
-  const [priority, setPriority] = useState('all')
-  const [search, setSearch]     = useState('')
-  const [sortBy, setSortBy]     = useState('due_date')
+  const [tasks, setTasks]               = useState([])
+  const [projects, setProjects]         = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [filter, setFilter]             = useState('all')
+  const [priority, setPriority]         = useState('all')
+  const [search, setSearch]             = useState('')
+  const [sortBy, setSortBy]             = useState('due_date')
+  const [showNotif, setShowNotif]       = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const [debugInfo, setDebugInfo]       = useState('')
 
   useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
+    setLoading(true)
     try {
-      const [tasksRes, projRes] = await Promise.all([
-        api.get('/tasks/my'),
+      // Try every possible tasks endpoint — use whichever returns data
+      const endpoints = ['/tasks/my', '/tasks', '/tasks/my-tasks', '/tasks/assigned', '/tasks/user']
+      let foundTasks = []
+      let usedEndpoint = ''
+
+      for (const ep of endpoints) {
+        try {
+          const res = await api.get(ep)
+          console.log(`✅ ${ep} →`, res.data)
+          const extracted = extractTasks(res.data)
+          if (extracted.length > 0 || ep === '/tasks') {
+            foundTasks = extracted
+            usedEndpoint = ep
+            break
+          }
+        } catch (e) {
+          console.log(`❌ ${ep} →`, e.response?.status, e.response?.data?.message || e.message)
+        }
+      }
+
+      console.log(`🎯 Using endpoint: ${usedEndpoint}, found ${foundTasks.length} tasks`)
+      setDebugInfo(`Endpoint: ${usedEndpoint} | Tasks found: ${foundTasks.length}`)
+      setTasks(foundTasks)
+
+      const [projRes, notifRes] = await Promise.all([
         api.get('/projects'),
+        api.get('/tasks/notifications'),
       ])
-      setTasks(tasksRes.data.tasks || [])
       setProjects(projRes.data.projects || [])
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+      setNotifications(notifRes.data.notifications || [])
+    } catch (err) {
+      console.error('fetchData error:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleStatusChange = async (taskId, newStatus) => {
@@ -51,13 +104,15 @@ export default function TasksPage() {
     } catch (err) { console.error(err) }
   }
 
+  const handleLogout = () => { logout(); navigate('/login') }
+  const unread = notifications.filter(n => !n.is_read).length
   const totalTasks = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
 
   const filtered = tasks
     .filter(t => {
       if (filter !== 'all' && t.status !== filter) return false
       if (priority !== 'all' && t.priority !== priority) return false
-      if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
+      if (search && !t.title?.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
     .sort((a, b) => {
@@ -66,7 +121,7 @@ export default function TasksPage() {
         const order = { critical: 0, high: 1, medium: 2, low: 3 }
         return (order[a.priority] ?? 4) - (order[b.priority] ?? 4)
       }
-      if (sortBy === 'title') return a.title.localeCompare(b.title)
+      if (sortBy === 'title') return a.title?.localeCompare(b.title)
       return 0
     })
 
@@ -82,28 +137,45 @@ export default function TasksPage() {
     t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done'
   ).length
 
+  const mainNav = [
+    { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects.length },
+    { to: '/projects',  icon: 'ti-folder',            label: 'Projects',  count: projects.length },
+    { to: '/tasks',     icon: 'ti-checklist',          label: 'My Tasks',  count: totalTasks },
+    { to: '/calendar',  icon: 'ti-calendar',           label: 'Calendar' },
+  ]
+
+  const workspaceNav = [
+    { to: '/teams', icon: 'ti-users', label: 'Teams' },
+    ...(user?.role === 'admin' || user?.role === 'manager'
+      ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }]
+      : []),
+    ...(user?.role === 'admin' ? [
+      { to: '/admin',    icon: 'ti-shield',   label: 'Admin Settings' },
+      { to: '/settings', icon: 'ti-settings', label: 'Settings' },
+    ] : []),
+  ]
+
   return (
     <div className="flex min-h-screen">
-      <aside className="w-[260px] shrink-0 flex flex-col" style={{ backgroundColor: '#1a2235' }}>
-        <div className="flex items-center gap-3 px-6 py-5">
-          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold">T</div>
+
+      {/* ── Sidebar ── */}
+      <aside className="w-[240px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
+        style={{ backgroundColor: '#1a2235' }}>
+        <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: '1px solid #253047' }}>
+          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
           <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
-        <div className="flex-1 px-3 py-2">
-          <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
-          {[
-            { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects.length },
-            { to: '/projects',  icon: 'ti-folder',           label: 'Projects',  count: projects.length },
-            { to: '/tasks',     icon: 'ti-checklist',         label: 'My Tasks',  count: totalTasks },
-            { to: '/calendar',  icon: 'ti-calendar',          label: 'Calendar' },
-          ].map(item => {
+
+        <div className="flex-1 px-3 py-4 overflow-y-auto">
+          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
+          {mainNav.map(item => {
             const active = location.pathname === item.to
             return (
               <Link key={item.to} to={item.to}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
                 style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
-                <i className={`ti ${item.icon} text-base`} />
-                <span className="flex-1 font-medium">{item.label}</span>
+                <i className={`ti ${item.icon} text-[16px]`} />
+                <span className="flex-1">{item.label}</span>
                 {item.count !== undefined && (
                   <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
                     style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
@@ -113,46 +185,157 @@ export default function TasksPage() {
               </Link>
             )
           })}
-          <p className="px-3 py-2 mt-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
-          {[
-            { to: '/teams', icon: 'ti-users', label: 'Teams' },
-            ...(user?.role === 'admin' ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }] : []),
-            ...(user?.role === 'admin' ? [{ to: '/admin',   icon: 'ti-settings',  label: 'Settings' }] : []),
-          ].map(item => {
+
+          <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
+          {workspaceNav.map(item => {
             const active = location.pathname === item.to
             return (
               <Link key={item.to} to={item.to}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
                 style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
-                <i className={`ti ${item.icon} text-base`} />
-                <span className="font-medium">{item.label}</span>
+                <i className={`ti ${item.icon} text-[16px]`} />
+                {item.label}
               </Link>
             )
           })}
         </div>
-        <div className="px-3 pb-4 pt-2" style={{ borderTop: '1px solid #253047' }}>
-          <div onClick={() => navigate('/profile')}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition">
-            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium text-white truncate">{user?.name}</p>
-              <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
-            </div>
-            <button onClick={(e) => { e.stopPropagation(); logout(); navigate('/login') }}
-              className="text-sm transition" style={{ color: '#6b7a99' }}>
-              <i className="ti ti-logout" />
+
+        {/* User menu */}
+        <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
+          <div className="relative">
+            <button onClick={() => setShowUserMenu(!showUserMenu)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5 mb-1">
+              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
+                <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
+              </div>
+              <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`} style={{ color: '#6b7a99' }} />
             </button>
+
+            {showUserMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                <div className="px-4 py-3 border-b border-gray-100"
+                  style={{ background: 'linear-gradient(to right, #eff6ff, #eef2ff)' }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm">
+                      {user?.name?.charAt(0)?.toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-800">{user?.name}</p>
+                      <p className="text-xs text-gray-400">{user?.email}</p>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold mt-1 inline-block ${
+                        user?.role === 'admin'   ? 'bg-red-100 text-red-600' :
+                        user?.role === 'manager' ? 'bg-purple-100 text-purple-600' :
+                                                   'bg-green-100 text-green-600'
+                      }`}>{user?.role}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="py-1">
+                  <button onClick={() => { setShowUserMenu(false); navigate('/profile') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
+                    <i className="ti ti-user text-base text-gray-400" /> View Profile
+                  </button>
+                  <button onClick={() => { setShowUserMenu(false); navigate('/settings') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
+                    <i className="ti ti-settings text-base text-gray-400" /> Settings
+                  </button>
+                  <button onClick={() => { setShowUserMenu(false); navigate('/settings?tab=password') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
+                    <i className="ti ti-lock text-base text-gray-400" /> Change Password
+                  </button>
+                  {user?.role === 'admin' && (
+                    <button onClick={() => { setShowUserMenu(false); navigate('/admin') }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition text-left">
+                      <i className="ti ti-shield text-base" /> Admin Panel
+                    </button>
+                  )}
+                </div>
+                <div style={{ borderTop: '1px solid #f3f4f6' }}>
+                  <button onClick={() => { setShowUserMenu(false); handleLogout() }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 transition text-left">
+                    <i className="ti ti-logout text-base" /> Logout
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: '#f3f4f8' }}>
+      {/* ── Main area ── */}
+      <div className="flex-1 flex flex-col min-w-0 ml-[240px]" style={{ backgroundColor: '#f3f4f8' }}>
+
+        {/* Topbar */}
         <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
           style={{ borderBottom: '1px solid #e8eaf0' }}>
           <span className="text-[15px] font-semibold text-gray-800">My Tasks</span>
           <div className="flex items-center gap-2">
+
+            {/* Bell */}
+            <div className="relative">
+              <button onClick={() => setShowNotif(!showNotif)} aria-label="Notifications"
+                className="w-9 h-9 rounded-xl flex items-center justify-center transition"
+                style={{
+                  backgroundColor: unread > 0 ? '#fef3c7' : '#f3f4f6',
+                  border: `1.5px solid ${unread > 0 ? '#f59e0b' : '#d1d5db'}`,
+                  color: unread > 0 ? '#d97706' : '#374151',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = unread > 0 ? '#fde68a' : '#e5e7eb' }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = unread > 0 ? '#fef3c7' : '#f3f4f6' }}>
+                <BellIcon />
+                {unread > 0 && (
+                  <span className="absolute -top-1 -right-1 w-[17px] h-[17px] text-white text-[10px] rounded-full flex items-center justify-center font-bold"
+                    style={{ backgroundColor: '#ef4444', border: '2px solid #fff' }}>
+                    {unread}
+                  </span>
+                )}
+              </button>
+
+              {showNotif && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl z-50 overflow-hidden"
+                  style={{ border: '1px solid #e8eaf0' }}>
+                  <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid #f0f1f5' }}>
+                    <span className="text-sm font-semibold text-gray-800">Notifications</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{unread} unread</span>
+                      {unread > 0 && (
+                        <button onClick={async () => {
+                          try {
+                            await api.patch('/tasks/notifications/read')
+                            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+                          } catch (err) { console.error(err) }
+                        }} className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="text-center py-8 text-xs text-gray-400">No notifications</p>
+                    ) : notifications.slice(0, 10).map(n => (
+                      <div key={n.id}
+                        className={`px-4 py-3 hover:bg-gray-50 transition ${!n.is_read ? 'bg-blue-50/50' : ''}`}
+                        style={{ borderBottom: '1px solid #f5f6fa' }}>
+                        <div className="flex items-start gap-2">
+                          {!n.is_read && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
+                          <div>
+                            <p className="text-xs text-gray-700">{n.message}</p>
+                            <p className="text-[11px] text-gray-400 mt-0.5">{new Date(n.created_at).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Search */}
             <div className="relative">
               <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
               <input type="text" placeholder="Search tasks..." value={search}
@@ -160,6 +343,8 @@ export default function TasksPage() {
                 className="pl-8 pr-4 py-2 text-[13px] rounded-xl border focus:outline-none focus:border-blue-400 transition"
                 style={{ borderColor: '#e8eaf0', width: 200 }} />
             </div>
+
+            {/* Sort */}
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
               className="px-3 py-2 text-[13px] rounded-xl border focus:outline-none transition"
               style={{ borderColor: '#e8eaf0' }}>
@@ -171,12 +356,21 @@ export default function TasksPage() {
         </header>
 
         <main className="flex-1 p-8">
+
+          {/* Debug banner — remove after fixing */}
+          {debugInfo && (
+            <div className="mb-4 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-700 font-mono">
+              🔍 {debugInfo}
+            </div>
+          )}
+
+          {/* Stat cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             {[
-              { label: 'Total tasks',  value: tasks.length,       icon: 'ti-checklist',      color: '#2563eb', bg: '#eff6ff' },
-              { label: 'In progress',  value: counts.in_progress, icon: 'ti-loader',          color: '#9333ea', bg: '#faf5ff' },
-              { label: 'Due today',    value: tasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length, icon: 'ti-clock', color: '#ca8a04', bg: '#fefce8' },
-              { label: 'Overdue',      value: overdue,            icon: 'ti-alert-triangle',  color: '#dc2626', bg: '#fef2f2' },
+              { label: 'Total tasks', value: tasks.length,       icon: 'ti-checklist',     color: '#2563eb', bg: '#eff6ff' },
+              { label: 'In progress', value: counts.in_progress, icon: 'ti-loader',         color: '#9333ea', bg: '#faf5ff' },
+              { label: 'Due today',   value: tasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length, icon: 'ti-clock', color: '#ca8a04', bg: '#fefce8' },
+              { label: 'Overdue',     value: overdue,            icon: 'ti-alert-triangle', color: '#dc2626', bg: '#fef2f2' },
             ].map((s, i) => (
               <div key={i} className="bg-white rounded-2xl p-5 flex items-center gap-4" style={{ border: '1px solid #e8eaf0' }}>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
@@ -191,6 +385,7 @@ export default function TasksPage() {
             ))}
           </div>
 
+          {/* Filters */}
           <div className="flex gap-2 mb-6 flex-wrap">
             {[
               { key: 'all',         label: 'All' },
@@ -220,6 +415,7 @@ export default function TasksPage() {
             </div>
           </div>
 
+          {/* Task list */}
           {loading ? (
             <div className="space-y-3">
               {[1,2,3,4,5].map(i => (
@@ -238,7 +434,9 @@ export default function TasksPage() {
             <div className="text-center py-20 bg-white rounded-2xl border border-dashed" style={{ borderColor: '#d1d5db' }}>
               <i className="ti ti-checklist text-5xl text-gray-200 block mb-3" />
               <p className="text-sm font-semibold text-gray-400">No tasks found</p>
-              <p className="text-xs text-gray-300 mt-1">Try adjusting your filters</p>
+              <p className="text-xs text-gray-300 mt-1">
+                {tasks.length === 0 ? 'No tasks have been assigned to you yet' : 'Try adjusting your filters'}
+              </p>
             </div>
           ) : (
             <div className="space-y-2">

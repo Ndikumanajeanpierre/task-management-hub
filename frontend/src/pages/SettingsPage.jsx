@@ -1,32 +1,46 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+// SettingsPage.jsx
+import { useState, useEffect } from 'react'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 
 export default function SettingsPage() {
   const { user, login, logout } = useAuth()
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
+  const location  = useLocation()
 
   const [activeTab, setActiveTab] = useState('profile')
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [message, setMessage]     = useState({ text: '', type: '' })
+  const [loading, setLoading]     = useState(false)
+  const [projects, setProjects]   = useState([])
 
   const [profileForm, setProfileForm] = useState({
-    name: user?.name || '',
+    name:  user?.name  || '',
     email: user?.email || '',
   })
 
   const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+    currentPassword:  '',
+    newPassword:      '',
+    confirmPassword:  '',
   })
 
-  const showMsg = (msg, isError = false) => {
-    if (isError) setError(msg)
-    else setMessage(msg)
-    setTimeout(() => { setMessage(''); setError('') }, 4000)
+  useEffect(() => {
+    // ✅ only admin can access settings page
+    if (user?.role !== 'admin') { navigate('/dashboard'); return }
+    fetchProjects()
+  }, [])
+
+  const fetchProjects = async () => {
+    try {
+      const res = await api.get('/projects')
+      setProjects(res.data.projects || [])
+    } catch (err) { console.error(err) }
+  }
+
+  const showMsg = (text, type = 'success') => {
+    setMessage({ text, type })
+    setTimeout(() => setMessage({ text: '', type: '' }), 4000)
   }
 
   const handleProfileUpdate = async (e) => {
@@ -36,357 +50,425 @@ export default function SettingsPage() {
       await api.put(`/users/${user.id}`, profileForm)
       login({ ...user, name: profileForm.name, email: profileForm.email },
         localStorage.getItem('token'))
-      showMsg('✅ Profile updated successfully!')
+      showMsg('Profile updated successfully!', 'success')
     } catch (err) {
-      showMsg('❌ ' + (err.response?.data?.message || 'Failed to update profile.'), true)
-    } finally {
-      setLoading(false)
-    }
+      showMsg(err.response?.data?.message || 'Failed to update profile.', 'error')
+    } finally { setLoading(false) }
   }
 
   const handlePasswordChange = async (e) => {
     e.preventDefault()
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      showMsg('❌ New passwords do not match.', true)
-      return
+      showMsg('New passwords do not match.', 'error'); return
     }
     if (passwordForm.newPassword.length < 6) {
-      showMsg('❌ Password must be at least 6 characters.', true)
-      return
+      showMsg('Password must be at least 6 characters.', 'error'); return
     }
     setLoading(true)
     try {
       await api.patch(`/users/${user.id}/password`, {
         currentPassword: passwordForm.currentPassword,
-        newPassword: passwordForm.newPassword,
+        newPassword:     passwordForm.newPassword,
       })
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
-      showMsg('✅ Password changed successfully!')
+      showMsg('Password changed successfully!', 'success')
     } catch (err) {
-      showMsg('❌ ' + (err.response?.data?.message || 'Failed to change password.'), true)
-    } finally {
-      setLoading(false)
-    }
+      showMsg(err.response?.data?.message || 'Failed to change password.', 'error')
+    } finally { setLoading(false) }
   }
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+  const handleLogout = () => { logout(); navigate('/login') }
 
-  const roleColor = {
-    admin: 'from-red-500 to-pink-600',
-    manager: 'from-purple-500 to-purple-600',
-    member: 'from-blue-500 to-indigo-600',
-  }
+  const totalTasks = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
 
-  const tabs = [
-    { id: 'profile', label: '👤 Profile', icon: '👤' },
-    { id: 'password', label: '🔒 Password', icon: '🔒' },
-    { id: 'account', label: '⚙️ Account', icon: '⚙️' },
+  // ── Sidebar nav (admin only page) ──
+  const mainNav = [
+    { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects.length },
+    { to: '/projects',  icon: 'ti-folder',            label: 'Projects',  count: projects.length },
+    { to: '/tasks',     icon: 'ti-checklist',          label: 'My Tasks',  count: totalTasks },
+    { to: '/calendar',  icon: 'ti-calendar',           label: 'Calendar' },
   ]
 
+  const workspaceNav = [
+    { to: '/teams',    icon: 'ti-users',     label: 'Teams' },
+    { to: '/reports',  icon: 'ti-chart-bar', label: 'Reports' },
+    { to: '/admin',    icon: 'ti-shield',    label: 'Admin Settings' },
+    { to: '/settings', icon: 'ti-settings',  label: 'Settings' },
+  ]
+
+  const settingsTabs = [
+    { id: 'profile',  icon: 'ti-user',         label: 'Profile' },
+    { id: 'password', icon: 'ti-lock',          label: 'Password' },
+    { id: 'account',  icon: 'ti-info-circle',   label: 'Account' },
+  ]
+
+  const strengthLevel = passwordForm.newPassword.length === 0 ? null
+    : passwordForm.newPassword.length < 6  ? { label: 'Too weak', color: '#ef4444', width: '25%' }
+    : passwordForm.newPassword.length < 10 ? { label: 'Medium',   color: '#f59e0b', width: '60%' }
+    : { label: 'Strong',    color: '#22c55e', width: '100%' }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="text-gray-400 hover:text-gray-600 text-sm font-medium transition"
-              >
-                ← Dashboard
-              </button>
-              <div className="w-px h-6 bg-gray-200"></div>
-              <div className="w-9 h-9 bg-gradient-to-br from-gray-600 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
-                <span className="text-white text-sm">⚙️</span>
-              </div>
-              <span className="font-bold text-gray-800">Settings</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 bg-red-50 text-red-500 hover:bg-red-100 font-semibold text-sm px-4 py-2 rounded-xl transition"
-            >
-              🚪 Logout
-            </button>
-          </div>
+    <div className="flex min-h-screen">
+
+      {/* ── Sidebar ── */}
+      <aside className="w-[240px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
+        style={{ backgroundColor: '#1a2235' }}>
+
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-5 py-5"
+          style={{ borderBottom: '1px solid #253047' }}>
+          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
+          <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
-      </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+        {/* Nav */}
+        <div className="flex-1 px-3 py-4 overflow-y-auto">
+          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest"
+            style={{ color: '#6b7a99' }}>Main</p>
 
-        {/* Profile Header */}
-        <div className={`bg-gradient-to-br ${roleColor[user?.role]} rounded-3xl p-6 text-white mb-8 shadow-xl`}>
-          <div className="flex items-center gap-5">
-            <div className="w-20 h-20 rounded-2xl bg-white bg-opacity-20 flex items-center justify-center border-4 border-white border-opacity-30 shadow-lg">
-              <span className="text-4xl font-extrabold text-white">
-                {user?.name?.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div>
-              <h1 className="text-2xl font-extrabold">{user?.name}</h1>
-              <p className="text-white text-opacity-80 text-sm mt-0.5">{user?.email}</p>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="bg-white bg-opacity-20 text-white text-xs px-3 py-1 rounded-full font-semibold">
-                  {user?.role === 'admin' ? '⚙️ Administrator' :
-                   user?.role === 'manager' ? '📋 Project Manager' : '👤 Team Member'}
-                </span>
-                {user?.role === 'admin' && (
-                  <span className="bg-yellow-400 bg-opacity-30 text-yellow-100 text-xs px-3 py-1 rounded-full font-semibold">
-                    🔒 Protected Account
+          {mainNav.map(item => {
+            const active = location.pathname === item.to
+            return (
+              <Link key={item.to} to={item.to}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
+                style={{
+                  backgroundColor: active ? '#2d3f5e' : 'transparent',
+                  color: active ? '#ffffff' : '#8b9ab8',
+                }}>
+                <i className={`ti ${item.icon} text-[16px]`} />
+                <span className="flex-1">{item.label}</span>
+                {item.count !== undefined && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                    style={{
+                      backgroundColor: active ? '#3d5280' : '#253047',
+                      color: active ? '#93c5fd' : '#6b7a99',
+                    }}>
+                    {item.count}
                   </span>
                 )}
-              </div>
-            </div>
-          </div>
+              </Link>
+            )
+          })}
+
+          <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest"
+            style={{ color: '#6b7a99' }}>Workspace</p>
+
+          {workspaceNav.map(item => {
+            const active = location.pathname === item.to
+            return (
+              <Link key={item.to} to={item.to}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
+                style={{
+                  backgroundColor: active ? '#2d3f5e' : 'transparent',
+                  color: active ? '#ffffff' : '#8b9ab8',
+                }}>
+                <i className={`ti ${item.icon} text-[16px]`} />
+                {item.label}
+              </Link>
+            )
+          })}
         </div>
 
-        {/* Messages */}
-        {message && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl mb-6 text-sm font-medium">
-            {message}
-          </div>
-        )}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl mb-6 text-sm font-medium">
-            {error}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-
-          {/* Sidebar Tabs */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-2">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition flex items-center gap-3 ${
-                    activeTab === tab.id
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <span>{tab.icon}</span>
-                  {tab.label.split(' ').slice(1).join(' ')}
-                </button>
-              ))}
-
-              <div className="border-t border-gray-100 mt-2 pt-2">
-                <button
-                  onClick={handleLogout}
-                  className="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition flex items-center gap-3"
-                >
-                  <span>🚪</span> Logout
-                </button>
-              </div>
+        {/* User + Logout */}
+        <div className="px-3 pb-4 pt-2 shrink-0"
+          style={{ borderTop: '1px solid #253047' }}>
+          <div
+            onClick={() => navigate('/profile')}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/5 transition mb-1"
+          >
+            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
+              <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
             </div>
           </div>
 
-          {/* Content Area */}
-          <div className="lg:col-span-3">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition"
+            style={{ color: '#8b9ab8' }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.15)'
+              e.currentTarget.style.color = '#f87171'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'transparent'
+              e.currentTarget.style.color = '#8b9ab8'
+            }}
+          >
+            <i className="ti ti-logout text-[16px]" />
+            Logout
+          </button>
+        </div>
+      </aside>
 
-            {/* Profile Tab */}
-            {activeTab === 'profile' && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-1">Edit Profile</h2>
-                <p className="text-sm text-gray-400 mb-6">Update your name and email address</p>
+      {/* ── Main ── */}
+      <div className="flex-1 flex flex-col min-w-0 ml-[240px]"
+        style={{ backgroundColor: '#f3f4f8' }}>
 
-                {/* Admin warning */}
-                {user?.role === 'admin' && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl mb-6 text-sm flex items-center gap-2">
-                    <span>⚠️</span>
-                    <span>Admin account settings are protected. Changes are logged for security.</span>
-                  </div>
-                )}
+        {/* Topbar */}
+        <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
+          style={{ borderBottom: '1px solid #e8eaf0' }}>
+          <div className="flex items-center gap-2">
+            <i className="ti ti-settings text-[18px] text-gray-500" />
+            <span className="text-[15px] font-semibold text-gray-800">Settings</span>
+          </div>
+          <span className="text-[11px] px-3 py-1 rounded-full font-semibold bg-red-100 text-red-700">
+            admin
+          </span>
+        </header>
 
-                <form onSubmit={handleProfileUpdate} className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
-                    <input
-                      type="text"
-                      value={profileForm.name}
-                      onChange={e => setProfileForm({...profileForm, name: e.target.value})}
-                      required
-                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition"
-                      placeholder="Your full name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
-                    <input
-                      type="email"
-                      value={profileForm.email}
-                      onChange={e => setProfileForm({...profileForm, email: e.target.value})}
-                      required
-                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition"
-                      placeholder="Your email"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold px-8 py-3.5 rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition shadow-lg shadow-blue-200 text-sm"
-                  >
-                    {loading ? '⏳ Saving...' : '💾 Save Changes'}
-                  </button>
-                </form>
+        <main className="flex-1 p-8">
+
+          {/* Toast */}
+          {message.text && (
+            <div className={`mb-6 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${
+              message.type === 'success'
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              <i className={`ti ${message.type === 'success' ? 'ti-circle-check' : 'ti-circle-x'} text-base`} />
+              {message.text}
+            </div>
+          )}
+
+          {/* Profile header card */}
+          <div className="bg-white rounded-2xl p-6 mb-6 flex items-center gap-5"
+            style={{ border: '1px solid #e8eaf0' }}>
+            <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center shrink-0">
+              <span className="text-white text-2xl font-bold">
+                {user?.name?.charAt(0)?.toUpperCase()}
+              </span>
+            </div>
+            <div className="flex-1">
+              <h2 className="text-[18px] font-bold text-gray-900">{user?.name}</h2>
+              <p className="text-sm text-gray-400 mt-0.5">{user?.email}</p>
+              <span className={`text-[11px] px-2.5 py-1 rounded-full font-semibold mt-2 inline-block ${
+                user?.role === 'admin'   ? 'bg-red-100 text-red-700' :
+                user?.role === 'manager' ? 'bg-purple-100 text-purple-700' :
+                                           'bg-green-100 text-green-700'
+              }`}>
+                {user?.role}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+            {/* Left tab nav */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl p-2" style={{ border: '1px solid #e8eaf0' }}>
+                {settingsTabs.map(tab => {
+                  const active = activeTab === tab.id
+                  return (
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition mb-0.5"
+                      style={active
+                        ? { backgroundColor: '#2563eb', color: '#fff' }
+                        : { color: '#6b7280' }
+                      }>
+                      <i className={`ti ${tab.icon} text-[15px]`} />
+                      {tab.label}
+                    </button>
+                  )
+                })}
               </div>
-            )}
+            </div>
 
-            {/* Password Tab */}
-            {activeTab === 'password' && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-1">Change Password</h2>
-                <p className="text-sm text-gray-400 mb-6">Keep your account secure with a strong password</p>
+            {/* Right content */}
+            <div className="lg:col-span-3">
 
-                <form onSubmit={handlePasswordChange} className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Current Password</label>
-                    <input
-                      type="password"
-                      value={passwordForm.currentPassword}
-                      onChange={e => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
-                      required
-                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition"
-                      placeholder="Enter current password"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">New Password</label>
-                    <input
-                      type="password"
-                      value={passwordForm.newPassword}
-                      onChange={e => setPasswordForm({...passwordForm, newPassword: e.target.value})}
-                      required
-                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition"
-                      placeholder="Enter new password (min 6 characters)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm New Password</label>
-                    <input
-                      type="password"
-                      value={passwordForm.confirmPassword}
-                      onChange={e => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
-                      required
-                      className="w-full px-4 py-3.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition"
-                      placeholder="Confirm new password"
-                    />
+              {/* ── Profile Tab ── */}
+              {activeTab === 'profile' && (
+                <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
+                  <h3 className="text-[15px] font-bold text-gray-800 mb-1">Edit Profile</h3>
+                  <p className="text-xs text-gray-400 mb-6">Update your name and email address</p>
+
+                  <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl mb-6 text-xs flex items-center gap-2">
+                    <i className="ti ti-alert-triangle text-base" />
+                    Admin account changes are logged for security.
                   </div>
 
-                  {/* Password strength indicator */}
-                  {passwordForm.newPassword && (
+                  <form onSubmit={handleProfileUpdate} className="space-y-5">
                     <div>
-                      <p className="text-xs font-semibold text-gray-400 mb-1">Password Strength</p>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            passwordForm.newPassword.length < 6 ? 'bg-red-400 w-1/4' :
-                            passwordForm.newPassword.length < 10 ? 'bg-amber-400 w-2/4' :
-                            'bg-green-500 w-full'
-                          }`}
-                        ></div>
-                      </div>
-                      <p className={`text-xs mt-1 font-medium ${
-                        passwordForm.newPassword.length < 6 ? 'text-red-400' :
-                        passwordForm.newPassword.length < 10 ? 'text-amber-500' :
-                        'text-green-500'
-                      }`}>
-                        {passwordForm.newPassword.length < 6 ? 'Too weak' :
-                         passwordForm.newPassword.length < 10 ? 'Medium' : 'Strong ✓'}
-                      </p>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
+                      <input
+                        type="text"
+                        value={profileForm.name}
+                        onChange={e => setProfileForm({ ...profileForm, name: e.target.value })}
+                        required
+                        placeholder="Your full name"
+                        className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition"
+                        style={{ border: '1.5px solid #e8eaf0' }}
+                        onFocus={e => e.target.style.borderColor = '#2563eb'}
+                        onBlur={e => e.target.style.borderColor = '#e8eaf0'}
+                      />
                     </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold px-8 py-3.5 rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition shadow-lg shadow-blue-200 text-sm"
-                  >
-                    {loading ? '⏳ Changing...' : '🔒 Change Password'}
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* Account Tab */}
-            {activeTab === 'account' && (
-              <div className="space-y-5">
-
-                {/* Account Info */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <h2 className="text-lg font-bold text-gray-800 mb-4">Account Information</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { label: 'Full Name', value: user?.name, icon: '👤' },
-                      { label: 'Email', value: user?.email, icon: '📧' },
-                      { label: 'Role', value: user?.role, icon: '🔑' },
-                      { label: 'User ID', value: '#' + user?.id, icon: '🆔' },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
-                        <span className="text-xl">{item.icon}</span>
-                        <div>
-                          <p className="text-xs font-semibold text-gray-400 uppercase">{item.label}</p>
-                          <p className="text-sm font-bold text-gray-800 mt-0.5">{item.value}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Permissions */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <h2 className="text-lg font-bold text-gray-800 mb-4">Your Permissions</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      { perm: 'View Projects & Tasks', allowed: true },
-                      { perm: 'Create & Edit Tasks', allowed: true },
-                      { perm: 'Add Comments', allowed: true },
-                      { perm: 'Upload Attachments', allowed: true },
-                      { perm: 'Create Projects', allowed: user?.role === 'admin' || user?.role === 'manager' },
-                      { perm: 'Manage Teams', allowed: user?.role === 'admin' || user?.role === 'manager' },
-                      { perm: 'Admin Dashboard', allowed: user?.role === 'admin' },
-                      { perm: 'Manage All Users', allowed: user?.role === 'admin' },
-                      { perm: 'Delete Projects', allowed: user?.role === 'admin' || user?.role === 'manager' },
-                      { perm: 'View System Reports', allowed: user?.role === 'admin' },
-                    ].map((p, i) => (
-                      <div key={i} className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium ${
-                        p.allowed
-                          ? 'bg-green-50 text-green-700 border border-green-100'
-                          : 'bg-gray-50 text-gray-400 border border-gray-100'
-                      }`}>
-                        <span>{p.allowed ? '✅' : '🔒'}</span>
-                        {p.perm}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Danger Zone */}
-                <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-6">
-                  <h2 className="text-lg font-bold text-red-600 mb-1">Danger Zone</h2>
-                  <p className="text-sm text-gray-400 mb-4">These actions are irreversible</p>
-                  <div className="flex items-center justify-between p-4 bg-red-50 rounded-xl border border-red-100">
                     <div>
-                      <p className="text-sm font-bold text-gray-700">Sign out of your account</p>
-                      <p className="text-xs text-gray-400 mt-0.5">You will be redirected to the login page</p>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+                      <input
+                        type="email"
+                        value={profileForm.email}
+                        onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                        required
+                        placeholder="Your email"
+                        className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition"
+                        style={{ border: '1.5px solid #e8eaf0' }}
+                        onFocus={e => e.target.style.borderColor = '#2563eb'}
+                        onBlur={e => e.target.style.borderColor = '#e8eaf0'}
+                      />
                     </div>
                     <button
-                      onClick={handleLogout}
-                      className="bg-red-500 hover:bg-red-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition shadow-md shadow-red-200"
+                      type="submit"
+                      disabled={loading}
+                      className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
                     >
-                      🚪 Logout
+                      <i className="ti ti-device-floppy text-base" />
+                      {loading ? 'Saving...' : 'Save Changes'}
                     </button>
+                  </form>
+                </div>
+              )}
+
+              {/* ── Password Tab ── */}
+              {activeTab === 'password' && (
+                <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
+                  <h3 className="text-[15px] font-bold text-gray-800 mb-1">Change Password</h3>
+                  <p className="text-xs text-gray-400 mb-6">Keep your account secure with a strong password</p>
+
+                  <form onSubmit={handlePasswordChange} className="space-y-5">
+                    {[
+                      { label: 'Current Password',     key: 'currentPassword',  placeholder: 'Enter current password' },
+                      { label: 'New Password',         key: 'newPassword',      placeholder: 'Min 6 characters' },
+                      { label: 'Confirm New Password', key: 'confirmPassword',  placeholder: 'Repeat new password' },
+                    ].map(f => (
+                      <div key={f.key}>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">{f.label}</label>
+                        <input
+                          type="password"
+                          value={passwordForm[f.key]}
+                          onChange={e => setPasswordForm({ ...passwordForm, [f.key]: e.target.value })}
+                          required
+                          placeholder={f.placeholder}
+                          className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition"
+                          style={{ border: '1.5px solid #e8eaf0' }}
+                          onFocus={e => e.target.style.borderColor = '#2563eb'}
+                          onBlur={e => e.target.style.borderColor = '#e8eaf0'}
+                        />
+                      </div>
+                    ))}
+
+                    {/* Strength bar */}
+                    {strengthLevel && (
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <p className="text-xs font-semibold text-gray-400">Password Strength</p>
+                          <p className="text-xs font-semibold" style={{ color: strengthLevel.color }}>
+                            {strengthLevel.label}
+                          </p>
+                        </div>
+                        <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#f0f1f5' }}>
+                          <div className="h-full rounded-full transition-all duration-300"
+                            style={{ width: strengthLevel.width, backgroundColor: strengthLevel.color }} />
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+                    >
+                      <i className="ti ti-lock text-base" />
+                      {loading ? 'Changing...' : 'Change Password'}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* ── Account Tab ── */}
+              {activeTab === 'account' && (
+                <div className="space-y-5">
+
+                  {/* Account info */}
+                  <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
+                    <h3 className="text-[15px] font-bold text-gray-800 mb-4">Account Information</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Full Name', value: user?.name,         icon: 'ti-user' },
+                        { label: 'Email',     value: user?.email,        icon: 'ti-mail' },
+                        { label: 'Role',      value: user?.role,         icon: 'ti-shield' },
+                        { label: 'User ID',   value: '#' + user?.id,     icon: 'ti-id' },
+                      ].map((item, i) => (
+                        <div key={i} className="flex items-center gap-3 p-4 rounded-xl"
+                          style={{ backgroundColor: '#f8f9fb' }}>
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                            <i className={`ti ${item.icon} text-blue-600 text-[15px]`} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase">{item.label}</p>
+                            <p className="text-sm font-semibold text-gray-800 truncate mt-0.5">{item.value}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Permissions */}
+                  <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
+                    <h3 className="text-[15px] font-bold text-gray-800 mb-4">Your Permissions</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      {[
+                        { perm: 'View Projects & Tasks',  allowed: true },
+                        { perm: 'Create & Edit Tasks',    allowed: true },
+                        { perm: 'Add Comments',           allowed: true },
+                        { perm: 'Upload Attachments',     allowed: true },
+                        { perm: 'Create Projects',        allowed: user?.role === 'admin' || user?.role === 'manager' },
+                        { perm: 'Manage Teams',           allowed: user?.role === 'admin' || user?.role === 'manager' },
+                        { perm: 'View Reports',           allowed: user?.role === 'admin' || user?.role === 'manager' },
+                        { perm: 'Admin Dashboard',        allowed: user?.role === 'admin' },
+                        { perm: 'Manage All Users',       allowed: user?.role === 'admin' },
+                        { perm: 'Delete Projects',        allowed: user?.role === 'admin' || user?.role === 'manager' },
+                      ].map((p, i) => (
+                        <div key={i} className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-[12px] font-medium"
+                          style={p.allowed
+                            ? { backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }
+                            : { backgroundColor: '#f8f9fb', color: '#9ca3af', border: '1px solid #f0f1f5' }
+                          }>
+                          <i className={`ti ${p.allowed ? 'ti-circle-check' : 'ti-lock'} text-[14px]`} />
+                          {p.perm}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Danger zone */}
+                  <div className="bg-white rounded-2xl p-6"
+                    style={{ border: '1px solid #fecaca' }}>
+                    <h3 className="text-[15px] font-bold text-red-600 mb-1">Danger Zone</h3>
+                    <p className="text-xs text-gray-400 mb-4">These actions are irreversible</p>
+                    <div className="flex items-center justify-between p-4 rounded-xl"
+                      style={{ backgroundColor: '#fff5f5', border: '1px solid #fecaca' }}>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">Sign out of your account</p>
+                        <p className="text-xs text-gray-400 mt-0.5">You will be redirected to the login page</p>
+                      </div>
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition"
+                      >
+                        <i className="ti ti-logout text-base" />
+                        Logout
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   )
