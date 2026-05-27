@@ -56,12 +56,12 @@ const getTasksByProject = async (req, res) => {
     `;
     const params = [req.params.projectId];
 
-    if (status)        { query += ' AND t.status = ?';                                    params.push(status); }
-    if (priority)      { query += ' AND t.priority = ?';                                  params.push(priority); }
-    if (assigned_to)   { query += ' AND t.assigned_to = ?';                               params.push(assigned_to); }
-    if (due_date_from) { query += ' AND t.due_date >= ?';                                 params.push(due_date_from); }
-    if (due_date_to)   { query += ' AND t.due_date <= ?';                                 params.push(due_date_to); }
-    if (search)        { query += ' AND (t.title LIKE ? OR t.description LIKE ?)';        params.push(`%${search}%`, `%${search}%`); }
+    if (status)        { query += ' AND t.status = ?';                             params.push(status); }
+    if (priority)      { query += ' AND t.priority = ?';                           params.push(priority); }
+    if (assigned_to)   { query += ' AND t.assigned_to = ?';                        params.push(assigned_to); }
+    if (due_date_from) { query += ' AND t.due_date >= ?';                          params.push(due_date_from); }
+    if (due_date_to)   { query += ' AND t.due_date <= ?';                          params.push(due_date_to); }
+    if (search)        { query += ' AND (t.title LIKE ? OR t.description LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
 
     query += ' ORDER BY t.position ASC, t.created_at DESC';
 
@@ -292,20 +292,21 @@ const markNotificationsRead = async (req, res) => {
   }
 };
 
-// GET tasks assigned to logged-in user
+// GET tasks assigned to OR created by logged-in user
 const getMyTasks = async (req, res) => {
   try {
     const [tasks] = await db.query(
       `SELECT
         t.*,
-        p.name AS project_name,
-        u.name AS assignee_name
+        p.name  AS project_name,
+        u.name  AS assignee_name
        FROM tasks t
        LEFT JOIN projects p ON t.project_id = p.id
-       LEFT JOIN users u ON t.assigned_to = u.id
+       LEFT JOIN users   u ON t.assigned_to = u.id
        WHERE t.assigned_to = ?
+          OR t.created_by  = ?
        ORDER BY t.due_date ASC, t.created_at DESC`,
-      [req.user.id]
+      [req.user.id, req.user.id]
     );
     return res.status(200).json({ success: true, tasks });
   } catch (error) {
@@ -325,5 +326,5 @@ module.exports = {
   uploadAttachment,
   getAttachments,
   markNotificationsRead,
-  getMyTasks
+  getMyTasks,
 };

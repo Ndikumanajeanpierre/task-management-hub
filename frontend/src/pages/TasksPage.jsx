@@ -17,81 +17,37 @@ const STATUS_STYLE = {
   done:        { bg: '#f0fdf4', text: '#16a34a', label: 'Done' },
 }
 
-const BellIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-)
-
-// Extracts tasks array from whatever shape the API returns
-const extractTasks = (data) => {
-  if (!data) return []
-  if (Array.isArray(data)) return data
-  if (Array.isArray(data.tasks)) return data.tasks
-  if (Array.isArray(data.data)) return data.data
-  if (Array.isArray(data.items)) return data.items
-  if (Array.isArray(data.results)) return data.results
-  // last resort: find first array value in the object
-  const firstArr = Object.values(data).find(v => Array.isArray(v))
-  return firstArr || []
-}
-
 export default function TasksPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [tasks, setTasks]               = useState([])
-  const [projects, setProjects]         = useState([])
+  const [tasks, setTasks]                 = useState([])
+  const [projects, setProjects]           = useState([])
   const [notifications, setNotifications] = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [filter, setFilter]             = useState('all')
-  const [priority, setPriority]         = useState('all')
-  const [search, setSearch]             = useState('')
-  const [sortBy, setSortBy]             = useState('due_date')
-  const [showNotif, setShowNotif]       = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const [debugInfo, setDebugInfo]       = useState('')
+  const [loading, setLoading]             = useState(true)
+  const [filter, setFilter]               = useState('all')
+  const [priority, setPriority]           = useState('all')
+  const [search, setSearch]               = useState('')
+  const [sortBy, setSortBy]               = useState('due_date')
+  const [showNotif, setShowNotif]         = useState(false)
+  const [showUserMenu, setShowUserMenu]   = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      // Try every possible tasks endpoint — use whichever returns data
-      const endpoints = ['/tasks/my', '/tasks', '/tasks/my-tasks', '/tasks/assigned', '/tasks/user']
-      let foundTasks = []
-      let usedEndpoint = ''
-
-      for (const ep of endpoints) {
-        try {
-          const res = await api.get(ep)
-          console.log(`✅ ${ep} →`, res.data)
-          const extracted = extractTasks(res.data)
-          if (extracted.length > 0 || ep === '/tasks') {
-            foundTasks = extracted
-            usedEndpoint = ep
-            break
-          }
-        } catch (e) {
-          console.log(`❌ ${ep} →`, e.response?.status, e.response?.data?.message || e.message)
-        }
-      }
-
-      console.log(`🎯 Using endpoint: ${usedEndpoint}, found ${foundTasks.length} tasks`)
-      setDebugInfo(`Endpoint: ${usedEndpoint} | Tasks found: ${foundTasks.length}`)
-      setTasks(foundTasks)
-
-      const [projRes, notifRes] = await Promise.all([
+      const [tasksRes, projRes, notifRes] = await Promise.all([
+        api.get('/tasks/my'),
         api.get('/projects'),
         api.get('/tasks/notifications'),
       ])
+      setTasks(tasksRes.data.tasks || [])
       setProjects(projRes.data.projects || [])
       setNotifications(notifRes.data.notifications || [])
     } catch (err) {
-      console.error('fetchData error:', err)
+      console.error('fetchData error:', err.response?.data || err.message)
     } finally {
       setLoading(false)
     }
@@ -105,7 +61,7 @@ export default function TasksPage() {
   }
 
   const handleLogout = () => { logout(); navigate('/login') }
-  const unread = notifications.filter(n => !n.is_read).length
+  const unread    = notifications.filter(n => !n.is_read).length
   const totalTasks = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
 
   const filtered = tasks
@@ -150,32 +106,32 @@ export default function TasksPage() {
       ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }]
       : []),
     ...(user?.role === 'admin' ? [
-      { to: '/admin',    icon: 'ti-shield',   label: 'Admin Settings' },
-      { to: '/settings', icon: 'ti-settings', label: 'Settings' },
+      { to: '/admin', icon: 'ti-shield', label: 'Admin Settings' },
     ] : []),
+    { to: '/settings', icon: 'ti-settings', label: 'Settings' },
   ]
 
   return (
     <div className="flex min-h-screen">
 
-      {/* ── Sidebar ── */}
-      <aside className="w-[240px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
+      {/* Sidebar */}
+      <aside className="w-[260px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
         style={{ backgroundColor: '#1a2235' }}>
-        <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: '1px solid #253047' }}>
-          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
+        <div className="flex items-center gap-3 px-6 py-5">
+          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold">T</div>
           <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
 
-        <div className="flex-1 px-3 py-4 overflow-y-auto">
-          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
+        <div className="flex-1 px-3 py-2 overflow-y-auto">
+          <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
           {mainNav.map(item => {
             const active = location.pathname === item.to
             return (
               <Link key={item.to} to={item.to}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
                 style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
-                <i className={`ti ${item.icon} text-[16px]`} />
-                <span className="flex-1">{item.label}</span>
+                <i className={`ti ${item.icon} text-base`} />
+                <span className="flex-1 font-medium">{item.label}</span>
                 {item.count !== undefined && (
                   <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
                     style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
@@ -186,15 +142,15 @@ export default function TasksPage() {
             )
           })}
 
-          <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
+          <p className="px-3 py-2 mt-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
           {workspaceNav.map(item => {
             const active = location.pathname === item.to
             return (
               <Link key={item.to} to={item.to}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
                 style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
-                <i className={`ti ${item.icon} text-[16px]`} />
-                {item.label}
+                <i className={`ti ${item.icon} text-base`} />
+                <span className="font-medium">{item.label}</span>
               </Link>
             )
           })}
@@ -204,15 +160,16 @@ export default function TasksPage() {
         <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
           <div className="relative">
             <button onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5 mb-1">
-              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5">
+              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </div>
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
+                <p className="text-[13px] font-medium text-white truncate">{user?.name}</p>
                 <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
               </div>
-              <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`} style={{ color: '#6b7a99' }} />
+              <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`}
+                style={{ color: '#6b7a99' }} />
             </button>
 
             {showUserMenu && (
@@ -266,8 +223,8 @@ export default function TasksPage() {
         </div>
       </aside>
 
-      {/* ── Main area ── */}
-      <div className="flex-1 flex flex-col min-w-0 ml-[240px]" style={{ backgroundColor: '#f3f4f8' }}>
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0 ml-[260px]" style={{ backgroundColor: '#f3f4f8' }}>
 
         {/* Topbar */}
         <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
@@ -275,29 +232,20 @@ export default function TasksPage() {
           <span className="text-[15px] font-semibold text-gray-800">My Tasks</span>
           <div className="flex items-center gap-2">
 
-            {/* Bell */}
             <div className="relative">
-              <button onClick={() => setShowNotif(!showNotif)} aria-label="Notifications"
-                className="w-9 h-9 rounded-xl flex items-center justify-center transition"
-                style={{
-                  backgroundColor: unread > 0 ? '#fef3c7' : '#f3f4f6',
-                  border: `1.5px solid ${unread > 0 ? '#f59e0b' : '#d1d5db'}`,
-                  color: unread > 0 ? '#d97706' : '#374151',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = unread > 0 ? '#fde68a' : '#e5e7eb' }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = unread > 0 ? '#fef3c7' : '#f3f4f6' }}>
-                <BellIcon />
+              <button onClick={() => setShowNotif(!showNotif)}
+                className="w-9 h-9 rounded-xl border flex items-center justify-center text-gray-500 hover:bg-gray-50 transition relative"
+                style={{ borderColor: '#e8eaf0' }}>
+                <i className="ti ti-bell text-[17px]" />
                 {unread > 0 && (
-                  <span className="absolute -top-1 -right-1 w-[17px] h-[17px] text-white text-[10px] rounded-full flex items-center justify-center font-bold"
-                    style={{ backgroundColor: '#ef4444', border: '2px solid #fff' }}>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
                     {unread}
                   </span>
                 )}
               </button>
-
               {showNotif && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl z-50 overflow-hidden"
-                  style={{ border: '1px solid #e8eaf0' }}>
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border z-50 overflow-hidden"
+                  style={{ borderColor: '#e8eaf0' }}>
                   <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid #f0f1f5' }}>
                     <span className="text-sm font-semibold text-gray-800">Notifications</span>
                     <div className="flex items-center gap-2">
@@ -308,18 +256,18 @@ export default function TasksPage() {
                             await api.patch('/tasks/notifications/read')
                             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
                           } catch (err) { console.error(err) }
-                        }} className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">
+                        }} className="text-xs text-blue-600 font-semibold px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">
                           Mark all read
                         </button>
                       )}
                     </div>
                   </div>
-                  <div className="max-h-72 overflow-y-auto">
+                  <div className="max-h-64 overflow-y-auto">
                     {notifications.length === 0 ? (
                       <p className="text-center py-8 text-xs text-gray-400">No notifications</p>
                     ) : notifications.slice(0, 10).map(n => (
                       <div key={n.id}
-                        className={`px-4 py-3 hover:bg-gray-50 transition ${!n.is_read ? 'bg-blue-50/50' : ''}`}
+                        className={`px-4 py-3 hover:bg-gray-50 transition ${!n.is_read ? 'bg-blue-50/40' : ''}`}
                         style={{ borderBottom: '1px solid #f5f6fa' }}>
                         <div className="flex items-start gap-2">
                           {!n.is_read && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
@@ -335,7 +283,6 @@ export default function TasksPage() {
               )}
             </div>
 
-            {/* Search */}
             <div className="relative">
               <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
               <input type="text" placeholder="Search tasks..." value={search}
@@ -344,7 +291,6 @@ export default function TasksPage() {
                 style={{ borderColor: '#e8eaf0', width: 200 }} />
             </div>
 
-            {/* Sort */}
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
               className="px-3 py-2 text-[13px] rounded-xl border focus:outline-none transition"
               style={{ borderColor: '#e8eaf0' }}>
@@ -357,14 +303,6 @@ export default function TasksPage() {
 
         <main className="flex-1 p-8">
 
-          {/* Debug banner — remove after fixing */}
-          {debugInfo && (
-            <div className="mb-4 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-700 font-mono">
-              🔍 {debugInfo}
-            </div>
-          )}
-
-          {/* Stat cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             {[
               { label: 'Total tasks', value: tasks.length,       icon: 'ti-checklist',     color: '#2563eb', bg: '#eff6ff' },
@@ -372,7 +310,8 @@ export default function TasksPage() {
               { label: 'Due today',   value: tasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length, icon: 'ti-clock', color: '#ca8a04', bg: '#fefce8' },
               { label: 'Overdue',     value: overdue,            icon: 'ti-alert-triangle', color: '#dc2626', bg: '#fef2f2' },
             ].map((s, i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 flex items-center gap-4" style={{ border: '1px solid #e8eaf0' }}>
+              <div key={i} className="bg-white rounded-2xl p-5 flex items-center gap-4"
+                style={{ border: '1px solid #e8eaf0' }}>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
                   style={{ backgroundColor: s.bg, color: s.color }}>
                   <i className={`ti ${s.icon}`} />
@@ -385,7 +324,6 @@ export default function TasksPage() {
             ))}
           </div>
 
-          {/* Filters */}
           <div className="flex gap-2 mb-6 flex-wrap">
             {[
               { key: 'all',         label: 'All' },
@@ -415,7 +353,6 @@ export default function TasksPage() {
             </div>
           </div>
 
-          {/* Task list */}
           {loading ? (
             <div className="space-y-3">
               {[1,2,3,4,5].map(i => (
@@ -431,7 +368,8 @@ export default function TasksPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl border border-dashed" style={{ borderColor: '#d1d5db' }}>
+            <div className="text-center py-20 bg-white rounded-2xl border border-dashed"
+              style={{ borderColor: '#d1d5db' }}>
               <i className="ti ti-checklist text-5xl text-gray-200 block mb-3" />
               <p className="text-sm font-semibold text-gray-400">No tasks found</p>
               <p className="text-xs text-gray-300 mt-1">
@@ -443,7 +381,7 @@ export default function TasksPage() {
               {filtered.map(task => {
                 const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done'
                 const p = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE.medium
-                const s = STATUS_STYLE[task.status] || STATUS_STYLE.todo
+                const s = STATUS_STYLE[task.status]     || STATUS_STYLE.todo
                 return (
                   <div key={task.id}
                     className="bg-white rounded-2xl px-5 py-4 flex items-center gap-4 group transition hover:shadow-sm"

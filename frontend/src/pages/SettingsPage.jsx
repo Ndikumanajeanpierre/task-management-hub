@@ -1,4 +1,3 @@
-// SettingsPage.jsx
 import { useState, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -6,8 +5,8 @@ import api from '../services/api'
 
 export default function SettingsPage() {
   const { user, login, logout } = useAuth()
-  const navigate  = useNavigate()
-  const location  = useLocation()
+  const navigate = useNavigate()
+  const location = useLocation()
 
   const [activeTab, setActiveTab] = useState('profile')
   const [message, setMessage]     = useState({ text: '', type: '' })
@@ -20,14 +19,12 @@ export default function SettingsPage() {
   })
 
   const [passwordForm, setPasswordForm] = useState({
-    currentPassword:  '',
-    newPassword:      '',
-    confirmPassword:  '',
+    currentPassword: '',
+    newPassword:     '',
+    confirmPassword: '',
   })
 
   useEffect(() => {
-    // ✅ only admin can access settings page
-    if (user?.role !== 'admin') { navigate('/dashboard'); return }
     fetchProjects()
   }, [])
 
@@ -81,7 +78,6 @@ export default function SettingsPage() {
 
   const totalTasks = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
 
-  // ── Sidebar nav (admin only page) ──
   const mainNav = [
     { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects.length },
     { to: '/projects',  icon: 'ti-folder',            label: 'Projects',  count: projects.length },
@@ -90,38 +86,40 @@ export default function SettingsPage() {
   ]
 
   const workspaceNav = [
-    { to: '/teams',    icon: 'ti-users',     label: 'Teams' },
-    { to: '/reports',  icon: 'ti-chart-bar', label: 'Reports' },
-    { to: '/admin',    icon: 'ti-shield',    label: 'Admin Settings' },
-    { to: '/settings', icon: 'ti-settings',  label: 'Settings' },
+    { to: '/teams', icon: 'ti-users', label: 'Teams' },
+    ...(user?.role === 'admin' || user?.role === 'manager'
+      ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }]
+      : []),
+    ...(user?.role === 'admin' ? [
+      { to: '/admin',    icon: 'ti-shield',   label: 'Admin Settings' },
+    ] : []),
+    { to: '/settings', icon: 'ti-settings', label: 'Settings' },
   ]
 
   const settingsTabs = [
-    { id: 'profile',  icon: 'ti-user',         label: 'Profile' },
-    { id: 'password', icon: 'ti-lock',          label: 'Password' },
-    { id: 'account',  icon: 'ti-info-circle',   label: 'Account' },
+    { id: 'profile',  icon: 'ti-user',       label: 'Profile' },
+    { id: 'password', icon: 'ti-lock',        label: 'Password' },
+    { id: 'account',  icon: 'ti-info-circle', label: 'Account' },
   ]
 
   const strengthLevel = passwordForm.newPassword.length === 0 ? null
-    : passwordForm.newPassword.length < 6  ? { label: 'Too weak', color: '#ef4444', width: '25%' }
-    : passwordForm.newPassword.length < 10 ? { label: 'Medium',   color: '#f59e0b', width: '60%' }
-    : { label: 'Strong',    color: '#22c55e', width: '100%' }
+    : passwordForm.newPassword.length < 6  ? { label: 'Too weak', color: '#ef4444', width: '25%'  }
+    : passwordForm.newPassword.length < 10 ? { label: 'Medium',   color: '#f59e0b', width: '60%'  }
+    :                                        { label: 'Strong',    color: '#22c55e', width: '100%' }
 
   return (
     <div className="flex min-h-screen">
 
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <aside className="w-[240px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
         style={{ backgroundColor: '#1a2235' }}>
 
-        {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5"
           style={{ borderBottom: '1px solid #253047' }}>
           <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
           <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
 
-        {/* Nav */}
         <div className="flex-1 px-3 py-4 overflow-y-auto">
           <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest"
             style={{ color: '#6b7a99' }}>Main</p>
@@ -169,7 +167,6 @@ export default function SettingsPage() {
           })}
         </div>
 
-        {/* User + Logout */}
         <div className="px-3 pb-4 pt-2 shrink-0"
           style={{ borderTop: '1px solid #253047' }}>
           <div
@@ -204,25 +201,27 @@ export default function SettingsPage() {
         </div>
       </aside>
 
-      {/* ── Main ── */}
+      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 ml-[240px]"
         style={{ backgroundColor: '#f3f4f8' }}>
 
-        {/* Topbar */}
         <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
           style={{ borderBottom: '1px solid #e8eaf0' }}>
           <div className="flex items-center gap-2">
             <i className="ti ti-settings text-[18px] text-gray-500" />
             <span className="text-[15px] font-semibold text-gray-800">Settings</span>
           </div>
-          <span className="text-[11px] px-3 py-1 rounded-full font-semibold bg-red-100 text-red-700">
-            admin
+          <span className={`text-[11px] px-3 py-1 rounded-full font-semibold ${
+            user?.role === 'admin'   ? 'bg-red-100 text-red-700' :
+            user?.role === 'manager' ? 'bg-purple-100 text-purple-700' :
+                                       'bg-green-100 text-green-700'
+          }`}>
+            {user?.role}
           </span>
         </header>
 
         <main className="flex-1 p-8">
 
-          {/* Toast */}
           {message.text && (
             <div className={`mb-6 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${
               message.type === 'success'
@@ -234,7 +233,6 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Profile header card */}
           <div className="bg-white rounded-2xl p-6 mb-6 flex items-center gap-5"
             style={{ border: '1px solid #e8eaf0' }}>
             <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center shrink-0">
@@ -257,7 +255,6 @@ export default function SettingsPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-            {/* Left tab nav */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl p-2" style={{ border: '1px solid #e8eaf0' }}>
                 {settingsTabs.map(tab => {
@@ -277,21 +274,21 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Right content */}
             <div className="lg:col-span-3">
 
-              {/* ── Profile Tab ── */}
               {activeTab === 'profile' && (
                 <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
                   <h3 className="text-[15px] font-bold text-gray-800 mb-1">Edit Profile</h3>
-                  <p className="text-xs text-gray-400 mb-6">Update your name and email address</p>
+                  <p className="text-xs text-gray-400 mb-5">Update your name and email address</p>
 
-                  <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl mb-6 text-xs flex items-center gap-2">
-                    <i className="ti ti-alert-triangle text-base" />
-                    Admin account changes are logged for security.
-                  </div>
+                  {user?.role === 'admin' && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl mb-5 text-xs flex items-center gap-2">
+                      <i className="ti ti-alert-triangle text-base" />
+                      Admin account changes are logged for security.
+                    </div>
+                  )}
 
-                  <form onSubmit={handleProfileUpdate} className="space-y-5">
+                  <form onSubmit={handleProfileUpdate} className="space-y-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
                       <input
@@ -332,17 +329,16 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* ── Password Tab ── */}
               {activeTab === 'password' && (
                 <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
                   <h3 className="text-[15px] font-bold text-gray-800 mb-1">Change Password</h3>
-                  <p className="text-xs text-gray-400 mb-6">Keep your account secure with a strong password</p>
+                  <p className="text-xs text-gray-400 mb-5">Keep your account secure with a strong password</p>
 
-                  <form onSubmit={handlePasswordChange} className="space-y-5">
+                  <form onSubmit={handlePasswordChange} className="space-y-4">
                     {[
-                      { label: 'Current Password',     key: 'currentPassword',  placeholder: 'Enter current password' },
-                      { label: 'New Password',         key: 'newPassword',      placeholder: 'Min 6 characters' },
-                      { label: 'Confirm New Password', key: 'confirmPassword',  placeholder: 'Repeat new password' },
+                      { label: 'Current Password',     key: 'currentPassword', placeholder: 'Enter current password' },
+                      { label: 'New Password',         key: 'newPassword',     placeholder: 'Min 6 characters' },
+                      { label: 'Confirm New Password', key: 'confirmPassword', placeholder: 'Repeat new password' },
                     ].map(f => (
                       <div key={f.key}>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">{f.label}</label>
@@ -360,7 +356,6 @@ export default function SettingsPage() {
                       </div>
                     ))}
 
-                    {/* Strength bar */}
                     {strengthLevel && (
                       <div>
                         <div className="flex justify-between items-center mb-1.5">
@@ -388,19 +383,17 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* ── Account Tab ── */}
               {activeTab === 'account' && (
                 <div className="space-y-5">
 
-                  {/* Account info */}
                   <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
                     <h3 className="text-[15px] font-bold text-gray-800 mb-4">Account Information</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { label: 'Full Name', value: user?.name,         icon: 'ti-user' },
-                        { label: 'Email',     value: user?.email,        icon: 'ti-mail' },
-                        { label: 'Role',      value: user?.role,         icon: 'ti-shield' },
-                        { label: 'User ID',   value: '#' + user?.id,     icon: 'ti-id' },
+                        { label: 'Full Name', value: user?.name,     icon: 'ti-user'   },
+                        { label: 'Email',     value: user?.email,    icon: 'ti-mail'   },
+                        { label: 'Role',      value: user?.role,     icon: 'ti-shield' },
+                        { label: 'User ID',   value: '#' + user?.id, icon: 'ti-id'     },
                       ].map((item, i) => (
                         <div key={i} className="flex items-center gap-3 p-4 rounded-xl"
                           style={{ backgroundColor: '#f8f9fb' }}>
@@ -416,21 +409,20 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Permissions */}
                   <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
                     <h3 className="text-[15px] font-bold text-gray-800 mb-4">Your Permissions</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                       {[
-                        { perm: 'View Projects & Tasks',  allowed: true },
-                        { perm: 'Create & Edit Tasks',    allowed: true },
-                        { perm: 'Add Comments',           allowed: true },
-                        { perm: 'Upload Attachments',     allowed: true },
-                        { perm: 'Create Projects',        allowed: user?.role === 'admin' || user?.role === 'manager' },
-                        { perm: 'Manage Teams',           allowed: user?.role === 'admin' || user?.role === 'manager' },
-                        { perm: 'View Reports',           allowed: user?.role === 'admin' || user?.role === 'manager' },
-                        { perm: 'Admin Dashboard',        allowed: user?.role === 'admin' },
-                        { perm: 'Manage All Users',       allowed: user?.role === 'admin' },
-                        { perm: 'Delete Projects',        allowed: user?.role === 'admin' || user?.role === 'manager' },
+                        { perm: 'View Projects & Tasks', allowed: true },
+                        { perm: 'Create & Edit Tasks',   allowed: true },
+                        { perm: 'Add Comments',          allowed: true },
+                        { perm: 'Upload Attachments',    allowed: true },
+                        { perm: 'Create Projects',       allowed: user?.role === 'admin' || user?.role === 'manager' },
+                        { perm: 'Manage Teams',          allowed: user?.role === 'admin' || user?.role === 'manager' },
+                        { perm: 'View Reports',          allowed: user?.role === 'admin' || user?.role === 'manager' },
+                        { perm: 'Admin Dashboard',       allowed: user?.role === 'admin' },
+                        { perm: 'Manage All Users',      allowed: user?.role === 'admin' },
+                        { perm: 'Delete Projects',       allowed: user?.role === 'admin' || user?.role === 'manager' },
                       ].map((p, i) => (
                         <div key={i} className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-[12px] font-medium"
                           style={p.allowed
@@ -444,7 +436,6 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Danger zone */}
                   <div className="bg-white rounded-2xl p-6"
                     style={{ border: '1px solid #fecaca' }}>
                     <h3 className="text-[15px] font-bold text-red-600 mb-1">Danger Zone</h3>

@@ -9,11 +9,11 @@ import CreateTeamPage from './pages/CreateTeamPage'
 import TeamsPage from './pages/TeamsPage'
 import AdminPage from './pages/AdminPage'
 import ProfilePage from './pages/ProfilePage'
+import SettingsPage from './pages/SettingsPage'
 import TasksPage from './pages/TasksPage'
+import ProjectsPage from './pages/ProjectsPage'
 import CalendarPage from './pages/CalendarPage'
 import ReportsPage from './pages/ReportsPage'
-import ProjectsPage from './pages/ProjectsPage'
-import SettingsPage from './pages/SettingsPage'
 
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth()
@@ -25,15 +25,27 @@ const ProtectedRoute = ({ children }) => {
   return token ? children : <Navigate to="/login" />
 }
 
-const RoleRoute = ({ children, allowedRoles }) => {
-  const { token, user, loading } = useAuth()
+const AdminRoute = ({ children }) => {
+  const { token, loading, user } = useAuth()
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-gray-400">Loading...</div>
     </div>
   )
   if (!token) return <Navigate to="/login" />
-  if (!allowedRoles.includes(user?.role)) return <Navigate to="/dashboard" />
+  if (user?.role !== 'admin') return <Navigate to="/dashboard" />
+  return children
+}
+
+const ReportsRoute = ({ children }) => {
+  const { token, loading, user } = useAuth()
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-400">Loading...</div>
+    </div>
+  )
+  if (!token) return <Navigate to="/login" />
+  if (user?.role !== 'admin' && user?.role !== 'manager') return <Navigate to="/dashboard" />
   return children
 }
 
@@ -62,20 +74,11 @@ export default function App() {
       <Route path="/calendar" element={
         <ProtectedRoute><CalendarPage /></ProtectedRoute>
       } />
-
-      {/* Reports — admin and manager only, members get redirected to dashboard */}
-      <Route path="/reports" element={
-        <RoleRoute allowedRoles={['admin', 'manager']}><ReportsPage /></RoleRoute>
-      } />
-
       <Route path="/teams" element={
         <ProtectedRoute><TeamsPage /></ProtectedRoute>
       } />
       <Route path="/teams/new" element={
         <ProtectedRoute><CreateTeamPage /></ProtectedRoute>
-      } />
-      <Route path="/admin" element={
-        <ProtectedRoute><AdminPage /></ProtectedRoute>
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>
@@ -83,6 +86,16 @@ export default function App() {
       <Route path="/settings" element={
         <ProtectedRoute><SettingsPage /></ProtectedRoute>
       } />
+
+      <Route path="/admin" element={
+        <AdminRoute><AdminPage /></AdminRoute>
+      } />
+
+      <Route path="/reports" element={
+        <ReportsRoute><ReportsPage /></ReportsRoute>
+      } />
+
+      <Route path="*" element={<Navigate to="/dashboard" />} />
     </Routes>
   )
 }
