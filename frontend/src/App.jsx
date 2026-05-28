@@ -14,6 +14,8 @@ import TasksPage from './pages/TasksPage'
 import ProjectsPage from './pages/ProjectsPage'
 import CalendarPage from './pages/CalendarPage'
 import ReportsPage from './pages/ReportsPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth()
@@ -55,6 +57,10 @@ export default function App() {
       <Route path="/" element={<Navigate to="/dashboard" />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+
+      {/* ✅ New public routes — no auth required */}
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route path="/dashboard" element={
         <ProtectedRoute><DashboardPage /></ProtectedRoute>
