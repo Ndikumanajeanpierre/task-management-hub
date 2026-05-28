@@ -75,7 +75,9 @@ export default function CalendarPage() {
     .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
     .slice(0, 8)
 
-  // ── Shared sidebar nav (same across all pages) ──
+  // FIX 1: single boolean reused for both sidebar and task links
+  const canAccessProjects = user?.role === 'admin' || user?.role === 'manager'
+
   const mainNav = [
     { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects.length },
     { to: '/projects',  icon: 'ti-folder',            label: 'Projects',  count: projects.length },
@@ -83,12 +85,31 @@ export default function CalendarPage() {
     { to: '/calendar',  icon: 'ti-calendar',           label: 'Calendar' },
   ]
 
+  // FIX 1: Reports only visible to admin and manager
   const workspaceNav = [
-    { to: '/teams',   icon: 'ti-users',     label: 'Teams' },
-    { to: '/reports', icon: 'ti-chart-bar', label: 'Reports' },
+    { to: '/teams', icon: 'ti-users', label: 'Teams' },
+    ...(canAccessProjects
+      ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }]
+      : []),
     ...(user?.role === 'admin' ? [{ to: '/admin',    icon: 'ti-shield',   label: 'Admin Settings' }] : []),
     ...(user?.role === 'admin' ? [{ to: '/settings', icon: 'ti-settings', label: 'Settings' }] : []),
   ]
+
+  const TaskCardContent = ({ t }) => (
+    <>
+      <div className="w-2 h-2 rounded-full mt-1.5 shrink-0"
+        style={{ backgroundColor: PRIORITY_COLOR[t.priority] || '#9ca3af' }} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] font-semibold text-gray-800 truncate group-hover:text-blue-600 transition">
+          {t.title}
+        </p>
+        <p className="text-[11px] text-gray-400 mt-0.5">
+          {t.due_date && new Date(t.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {t.project_name && ` · ${t.project_name}`}
+        </p>
+      </div>
+    </>
+  )
 
   return (
     <div className="flex min-h-screen">
@@ -147,7 +168,7 @@ export default function CalendarPage() {
           })}
         </div>
 
-        {/* User + Logout — always visible for ALL roles */}
+        {/* User + Logout */}
         <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
           <div
             onClick={() => navigate('/profile')}
@@ -162,7 +183,6 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* Logout — always shown for ALL roles */}
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition"
@@ -289,22 +309,20 @@ export default function CalendarPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {(selected ? selectedTasks : upcomingTasks).map(t => (
-                    <Link key={t.id} to={`/projects/${t.project_id}`}
-                      className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition group block">
-                      <div className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-                        style={{ backgroundColor: PRIORITY_COLOR[t.priority] || '#9ca3af' }} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-semibold text-gray-800 truncate group-hover:text-blue-600 transition">
-                          {t.title}
-                        </p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">
-                          {t.due_date && new Date(t.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          {t.project_name && ` · ${t.project_name}`}
-                        </p>
+                  {/* FIX 2: members see task info only, no link to project page */}
+                  {(selected ? selectedTasks : upcomingTasks).map(t =>
+                    canAccessProjects ? (
+                      <Link key={t.id} to={`/projects/${t.project_id}`}
+                        className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition group block">
+                        <TaskCardContent t={t} />
+                      </Link>
+                    ) : (
+                      <div key={t.id}
+                        className="flex items-start gap-3 p-3 rounded-xl group">
+                        <TaskCardContent t={t} />
                       </div>
-                    </Link>
-                  ))}
+                    )
+                  )}
                 </div>
               )}
             </div>
