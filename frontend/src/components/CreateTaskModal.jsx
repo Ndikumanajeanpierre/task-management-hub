@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 
-export default function CreateTaskModal({ projectId, defaultStatus, onClose, onCreated }) {
+export default function CreateTaskModal({ projectId, defaultStatus, onClose, onCreated, currentUser }) {
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -9,7 +9,7 @@ export default function CreateTaskModal({ projectId, defaultStatus, onClose, onC
     due_date: '',
     status: defaultStatus || 'todo',
     labels: '',
-    assigned_to: '',
+    assigned_to: currentUser?.role === 'member' ? String(currentUser?.id) : '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -21,7 +21,6 @@ export default function CreateTaskModal({ projectId, defaultStatus, onClose, onC
 
   const fetchProjectMembers = async () => {
     try {
-      // Get project to find team_id
       const projRes = await api.get(`/projects/${projectId}`)
       const teamId = projRes.data.project?.team_id
       if (teamId) {
@@ -66,12 +65,19 @@ export default function CreateTaskModal({ projectId, defaultStatus, onClose, onC
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-800">Create New Task</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+          >
+            ×
+          </button>
         </div>
 
         <div className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg">⚠️ {error}</div>
+            <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg">
+              ⚠️ {error}
+            </div>
           )}
 
           {/* Title */}
@@ -105,19 +111,26 @@ export default function CreateTaskModal({ projectId, defaultStatus, onClose, onC
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Assign To
             </label>
-            <select
-              name="assigned_to"
-              value={form.assigned_to}
-              onChange={handleChange}
-              className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition"
-            >
-              <option value="">Unassigned</option>
-              {members.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.role})
-                </option>
-              ))}
-            </select>
+            {currentUser?.role === 'member' ? (
+              <div className="w-full px-4 py-2.5 border-2 border-gray-100 rounded-xl text-sm bg-gray-50 text-gray-500 flex items-center gap-2">
+                <span>👤</span>
+                <span>Assigned to you automatically</span>
+              </div>
+            ) : (
+              <select
+                name="assigned_to"
+                value={form.assigned_to}
+                onChange={handleChange}
+                className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition"
+              >
+                <option value="">Unassigned</option>
+                {members.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.role})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Priority + Status */}
