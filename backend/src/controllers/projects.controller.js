@@ -14,15 +14,12 @@ const createProject = async (req, res) => {
       [name, description || null, team_id, req.user.id, start_date || null, end_date || null]
     );
 
-    // Log activity (wrapped so it never breaks project creation)
     try {
       await db.query(
         'INSERT INTO activity_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)',
         [req.user.id, result.insertId, 'project_created', `Project "${name}" was created`]
       );
-    } catch (logErr) {
-      console.log('Activity log warning:', logErr.message);
-    }
+    } catch (logErr) { console.log('Activity log warning:', logErr.message); }
 
     return res.status(201).json({
       success: true,
@@ -82,9 +79,13 @@ const updateProject = async (req, res) => {
   try {
     const { name, description, status, start_date, end_date } = req.body;
     await db.query(
-      `UPDATE projects SET name = COALESCE(?, name), description = COALESCE(?, description),
-       status = COALESCE(?, status), start_date = COALESCE(?, start_date),
-       end_date = COALESCE(?, end_date) WHERE id = ?`,
+      `UPDATE projects SET
+        name        = COALESCE(?, name),
+        description = COALESCE(?, description),
+        status      = COALESCE(?, status),
+        start_date  = COALESCE(?, start_date),
+        end_date    = COALESCE(?, end_date)
+       WHERE id = ?`,
       [name, description, status, start_date, end_date, req.params.id]
     );
     return res.status(200).json({ success: true, message: 'Project updated.' });
@@ -135,7 +136,7 @@ const archiveProject = async (req, res) => {
         'INSERT INTO activity_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)',
         [req.user.id, req.params.id, 'project_archived', 'Project was archived']
       );
-    } catch (logErr) { console.log('Log warning:', logErr.message) }
+    } catch (logErr) { console.log('Log warning:', logErr.message); }
 
     return res.status(200).json({ success: true, message: 'Project archived.' });
   } catch (error) {
@@ -143,4 +144,52 @@ const archiveProject = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
-module.exports = { createProject, getAllProjects, getProjectById, updateProject, deleteProject, getProjectActivity, archiveProject };
+
+// GET all activity logs — admin only
+const getAllActivity = async (req, res) => {
+  try {
+    const limit  = parseInt(req.query.limit)  || 50
+    const offset = parseInt(req.query.offset) || 0
+    const action = req.query.action           || ''
+
+    let query = `
+      SELECT
+        al.*,
+        u.name  AS user_name,
+        u.role  AS user_role,
+        p.name  AS project_name,
+        t.title AS task_title
+      FROM activity_logs al
+      LEFT JOIN users    u ON al.user_id    = u.id
+      LEFT JOIN projects p ON al.project_id = p.id
+      LEFT JOIN tasks    t ON al.task_id    = t.id
+    `
+    const params = []
+    if (action) { query += ' WHERE al.action = ?'; params.push(action) }
+    query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?'
+    params.push(limit, offset)
+
+    const [logs] = await db.query(query, params)
+
+    const [[{ total }]] = await db.query(
+      `SELECT COUNT(*) AS total FROM activity_logs ${action ? 'WHERE action = ?' : ''}`,
+      action ? [action] : []
+    )
+
+    return res.status(200).json({ success: true, logs, total })
+  } catch (error) {
+    console.error('GetAllActivity error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
+  }
+}
+
+module.exports = {
+  createProject,
+  getAllProjects,
+  getProjectById,
+  updateProject,
+  deleteProject,
+  getProjectActivity,
+  archiveProject,
+  getAllActivity,
+}
