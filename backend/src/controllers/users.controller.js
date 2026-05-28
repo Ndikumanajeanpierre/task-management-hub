@@ -1,9 +1,11 @@
 const db = require('../config/db');
+const path = require('path');
+const fs = require('fs');
 
 const getAllUsers = async (req, res) => {
   try {
     const [users] = await db.query(
-      'SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC'
+      'SELECT id, name, email, role, avatar, created_at FROM users ORDER BY created_at DESC'
     );
     return res.status(200).json({ success: true, users });
   } catch (error) {
@@ -15,7 +17,7 @@ const getAllUsers = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const [users] = await db.query(
-      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, role, avatar, created_at FROM users WHERE id = ?',
       [req.params.id]
     );
     if (users.length === 0) {
@@ -24,48 +26,6 @@ const getUserById = async (req, res) => {
     return res.status(200).json({ success: true, user: users[0] });
   } catch (error) {
     console.error('GetUserById error:', error.message);
-    return res.status(500).json({ success: false, message: 'Server error.' });
-  }
-};
-
-const updateUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email } = req.body;
-
-    if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Forbidden.' });
-    }
-
-    if (!name || !email) {
-      return res.status(400).json({ success: false, message: 'Name and email are required.' });
-    }
-
-    const [existing] = await db.query(
-      'SELECT id FROM users WHERE email = ? AND id != ?',
-      [email, id]
-    );
-    if (existing.length > 0) {
-      return res.status(409).json({ success: false, message: 'Email already in use.' });
-    }
-
-    await db.query(
-      'UPDATE users SET name = ?, email = ? WHERE id = ?',
-      [name, email, id]
-    );
-
-    const [rows] = await db.query(
-      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
-      [id]
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: 'Profile updated successfully.',
-      user: rows[0]
-    });
-  } catch (error) {
-    console.error('UpdateUser error:', error.message);
     return res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
@@ -115,55 +75,90 @@ const deleteUser = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
-// CHANGE PASSWORD
+
 const changePassword = async (req, res) => {
   try {
-    const bcrypt = require('bcryptjs')
-    const { currentPassword, newPassword } = req.body
+    const bcrypt = require('bcryptjs');
+    const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ success: false, message: 'Both passwords are required.' })
+      return res.status(400).json({ success: false, message: 'Both passwords are required.' });
     }
 
-    const [users] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id])
+    const [users] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (users.length === 0) {
-      return res.status(404).json({ success: false, message: 'User not found.' })
+      return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    const isMatch = await bcrypt.compare(currentPassword, users[0].password_hash)
+    const isMatch = await bcrypt.compare(currentPassword, users[0].password_hash);
     if (!isMatch) {
-      return res.status(400).json({ success: false, message: 'Current password is incorrect.' })
+      return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
     }
 
-    const salt = await bcrypt.genSalt(10)
-    const newHash = await bcrypt.hash(newPassword, salt)
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(newPassword, salt);
 
-    await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, req.params.id])
-
-    return res.status(200).json({ success: true, message: 'Password changed successfully.' })
+    await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, req.params.id]);
+    return res.status(200).json({ success: true, message: 'Password changed successfully.' });
   } catch (error) {
-    console.error('ChangePassword error:', error.message)
-    return res.status(500).json({ success: false, message: 'Server error.' })
+    console.error('ChangePassword error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
-}
+};
 
-// UPDATE user profile
 const updateProfile = async (req, res) => {
   try {
-    const { name, email } = req.body
+    const { name, email } = req.body;
     if (!name || !email) {
-      return res.status(400).json({ success: false, message: 'Name and email are required.' })
+      return res.status(400).json({ success: false, message: 'Name and email are required.' });
     }
 
     await db.query(
       'UPDATE users SET name = ?, email = ? WHERE id = ?',
       [name, email, req.params.id]
-    )
+    );
 
-    return res.status(200).json({ success: true, message: 'Profile updated successfully.' })
+    return res.status(200).json({ success: true, message: 'Profile updated successfully.' });
   } catch (error) {
-    console.error('UpdateProfile error:', error.message)
-    return res.status(500).json({ success: false, message: 'Server error.' })
+    console.error('UpdateProfile error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
-}
-module.exports = { getAllUsers, getUserById, updateUserRole, deleteUser, changePassword, updateProfile }
+};
+
+const uploadAvatar = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user.id !== parseInt(id)) {
+      return res.status(403).json({ success: false, message: 'Forbidden.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded.' });
+    }
+
+    // Delete old avatar from disk
+    const [users] = await db.query('SELECT avatar FROM users WHERE id = ?', [id]);
+    if (users.length > 0 && users[0].avatar) {
+      const oldPath = path.join(__dirname, '../../../uploads', path.basename(users[0].avatar));
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    await db.query('UPDATE users SET avatar = ? WHERE id = ?', [avatarUrl, id]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Avatar updated successfully.',
+      avatar: avatarUrl
+    });
+  } catch (error) {
+    console.error('UploadAvatar error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
+module.exports = {
+  getAllUsers, getUserById, updateUserRole,
+  deleteUser, changePassword, updateProfile, uploadAvatar
+};

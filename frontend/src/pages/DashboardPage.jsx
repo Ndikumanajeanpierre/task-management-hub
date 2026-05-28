@@ -12,25 +12,56 @@ const BellIcon = () => (
   </svg>
 )
 
+// ── Helper: build full avatar URL from stored path ─────────────────────────
+const getAvatarUrl = (avatar) => {
+  if (!avatar) return null
+  if (avatar.startsWith('http')) return avatar
+  return `http://localhost:5000${avatar}`
+}
+
+// ── Reusable Avatar component ──────────────────────────────────────────────
+const Avatar = ({ user, size = 8, rounded = 'lg' }) => {
+  const avatarUrl = getAvatarUrl(user?.avatar)
+  const initials  = user?.name?.charAt(0)?.toUpperCase() || 'U'
+  const px        = size * 4  // Tailwind w-8 = 32px, w-10 = 40px
+
+  return (
+    <div
+      style={{
+        width: px, height: px,
+        borderRadius: rounded === 'full' ? '50%' : 10,
+        backgroundColor: '#3b82f6',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden', flexShrink: 0,
+        fontSize: px * 0.35, fontWeight: 700, color: '#fff',
+      }}
+    >
+      {avatarUrl
+        ? <img src={avatarUrl} alt="avatar"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : initials}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [projects, setProjects] = useState([])
+  const navigate  = useNavigate()
+  const location  = useLocation()
+  const [projects, setProjects]         = useState([])
   const [notifications, setNotifications] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showNotif, setShowNotif] = useState(false)
+  const [loading, setLoading]           = useState(true)
+  const [showNotif, setShowNotif]       = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter]             = useState('all')
 
   // ── Search state ──
-  const [showSearch, setShowSearch] = useState(false)
+  const [showSearch, setShowSearch]   = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const searchInputRef = useRef(null)
 
   useEffect(() => { fetchProjects(); fetchNotifications() }, [])
 
-  // Auto-focus search input when modal opens
   useEffect(() => {
     if (showSearch) {
       setTimeout(() => searchInputRef.current?.focus(), 50)
@@ -39,7 +70,6 @@ export default function DashboardPage() {
     }
   }, [showSearch])
 
-  // Close search on Escape key
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape') setShowSearch(false)
@@ -68,13 +98,12 @@ export default function DashboardPage() {
   }
 
   const handleLogout = () => { logout(); navigate('/login') }
-  const unread = notifications.filter(n => !n.is_read).length
-  const activeCount = projects.filter(p => p.status === 'active').length
-  const totalTasks = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
-  const activePct = projects.length > 0 ? Math.round((activeCount / projects.length) * 100) : 0
+  const unread          = notifications.filter(n => !n.is_read).length
+  const activeCount     = projects.filter(p => p.status === 'active').length
+  const totalTasks      = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
+  const activePct       = projects.length > 0 ? Math.round((activeCount / projects.length) * 100) : 0
   const filteredProjects = filter === 'all' ? projects : projects.filter(p => p.status === filter)
 
-  // ── Search results ──
   const searchResults = searchQuery.trim().length === 0 ? [] : projects.filter(p =>
     p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -124,7 +153,6 @@ export default function DashboardPage() {
             style={{ border: '1px solid #e8eaf0' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Search input */}
             <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid #f0f1f5' }}>
               <i className="ti ti-search text-gray-400 text-[18px] shrink-0" />
               <input
@@ -147,7 +175,6 @@ export default function DashboardPage() {
               </kbd>
             </div>
 
-            {/* Results */}
             <div className="max-h-80 overflow-y-auto">
               {searchQuery.trim() === '' ? (
                 <div className="px-4 py-3">
@@ -203,7 +230,6 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Footer hint */}
             <div className="px-4 py-2.5 flex items-center gap-4" style={{ borderTop: '1px solid #f0f1f5', backgroundColor: '#fafafa' }}>
               <span className="text-[11px] text-gray-400 flex items-center gap-1.5">
                 <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium"
@@ -228,11 +254,14 @@ export default function DashboardPage() {
       {/* ── Sidebar ── */}
       <aside className="w-[240px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
         style={{ backgroundColor: '#1a2235' }}>
+
+        {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: '1px solid #253047' }}>
           <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
           <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
 
+        {/* Nav links */}
         <div className="flex-1 px-3 py-4 overflow-y-auto">
           <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
           {mainNav.map(item => {
@@ -267,13 +296,15 @@ export default function DashboardPage() {
           })}
         </div>
 
+        {/* ── Bottom user section ── */}
         <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
           <div className="relative">
             <button onClick={() => setShowUserMenu(!showUserMenu)}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5 mb-1">
-              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
+
+              {/* ✅ FIX 1: Avatar in sidebar bottom button */}
+              <Avatar user={user} size={8} />
+
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
                 <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
@@ -281,14 +312,16 @@ export default function DashboardPage() {
               <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`} style={{ color: '#6b7a99' }} />
             </button>
 
+            {/* ── User menu popup ── */}
             {showUserMenu && (
               <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-gray-100"
                   style={{ background: 'linear-gradient(to right, #eff6ff, #eef2ff)' }}>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm">
-                      {user?.name?.charAt(0)?.toUpperCase()}
-                    </div>
+
+                    {/* ✅ FIX 2: Avatar in popup header */}
+                    <Avatar user={user} size={10} />
+
                     <div>
                       <p className="text-sm font-bold text-gray-800">{user?.name}</p>
                       <p className="text-xs text-gray-400">{user?.email}</p>
@@ -300,6 +333,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
+
                 <div className="py-1">
                   <button onClick={() => { setShowUserMenu(false); navigate('/profile') }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
@@ -403,7 +437,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* ✅ Search button — now opens modal */}
+            {/* Search */}
             <button
               onClick={() => setShowSearch(true)}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] text-gray-500 hover:bg-gray-50 transition font-medium"
@@ -506,9 +540,9 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredProjects.map(project => {
                 const taskCount = parseInt(project.task_count) || 0
-                const progress = project.status === 'completed'
+                const progress  = project.status === 'completed'
                   ? 100 : Math.min(Math.round((taskCount / 5) * 100), 95)
-                const barColor = project.status === 'completed' ? '#22c55e' : '#2563eb'
+                const barColor  = project.status === 'completed' ? '#22c55e' : '#2563eb'
                 return (
                   <Link key={project.id} to={`/projects/${project.id}`}
                     className="bg-white rounded-2xl p-6 transition-all duration-150 group block hover:shadow-md"
