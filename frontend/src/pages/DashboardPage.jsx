@@ -1,10 +1,9 @@
 // DashboardPage.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 
-// SVG Bell icon — no icon font dependency
 const BellIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -24,7 +23,34 @@ export default function DashboardPage() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [filter, setFilter] = useState('all')
 
+  // ── Search state ──
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = useRef(null)
+
   useEffect(() => { fetchProjects(); fetchNotifications() }, [])
+
+  // Auto-focus search input when modal opens
+  useEffect(() => {
+    if (showSearch) {
+      setTimeout(() => searchInputRef.current?.focus(), 50)
+    } else {
+      setSearchQuery('')
+    }
+  }, [showSearch])
+
+  // Close search on Escape key
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'Escape') setShowSearch(false)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowSearch(true)
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [])
 
   const fetchProjects = async () => {
     try {
@@ -47,6 +73,13 @@ export default function DashboardPage() {
   const totalTasks = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
   const activePct = projects.length > 0 ? Math.round((activeCount / projects.length) * 100) : 0
   const filteredProjects = filter === 'all' ? projects : projects.filter(p => p.status === filter)
+
+  // ── Search results ──
+  const searchResults = searchQuery.trim().length === 0 ? [] : projects.filter(p =>
+    p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.team_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   const statusStyle = {
     active:    'bg-green-50 text-green-700',
@@ -79,38 +112,140 @@ export default function DashboardPage() {
   return (
     <div className="flex min-h-screen">
 
+      {/* ── Search Modal ── */}
+      {showSearch && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-24"
+          style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}
+          onClick={() => setShowSearch(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
+            style={{ border: '1px solid #e8eaf0' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Search input */}
+            <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid #f0f1f5' }}>
+              <i className="ti ti-search text-gray-400 text-[18px] shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search projects by name, description or team..."
+                className="flex-1 text-[14px] text-gray-800 placeholder-gray-400 focus:outline-none bg-transparent"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')}
+                  className="text-gray-300 hover:text-gray-500 transition">
+                  <i className="ti ti-x text-sm" />
+                </button>
+              )}
+              <kbd className="text-[11px] px-2 py-0.5 rounded-lg font-medium text-gray-400"
+                style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>
+                Esc
+              </kbd>
+            </div>
+
+            {/* Results */}
+            <div className="max-h-80 overflow-y-auto">
+              {searchQuery.trim() === '' ? (
+                <div className="px-4 py-3">
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Recent Projects</p>
+                  {projects.slice(0, 5).map(p => (
+                    <button key={p.id}
+                      onClick={() => { navigate(`/projects/${p.id}`); setShowSearch(false) }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition text-left">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{ backgroundColor: '#eff6ff', color: '#1e40af' }}>
+                        {p.name?.charAt(0)?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{p.team_name || 'No team'}</p>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusStyle[p.status] || 'bg-gray-100 text-gray-500'}`}>
+                        {p.status?.replace('_', ' ')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="text-center py-10">
+                  <i className="ti ti-search-off text-3xl text-gray-200 block mb-2" />
+                  <p className="text-[13px] text-gray-400">No projects found for <span className="font-semibold text-gray-600">"{searchQuery}"</span></p>
+                </div>
+              ) : (
+                <div className="px-4 py-3">
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                    {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                  </p>
+                  {searchResults.map(p => (
+                    <button key={p.id}
+                      onClick={() => { navigate(`/projects/${p.id}`); setShowSearch(false) }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition text-left">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{ backgroundColor: '#eff6ff', color: '#1e40af' }}>
+                        {p.name?.charAt(0)?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p>
+                        <p className="text-[11px] text-gray-400 truncate">
+                          {p.description || 'No description'} · {p.team_name || 'No team'}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusStyle[p.status] || 'bg-gray-100 text-gray-500'}`}>
+                        {p.status?.replace('_', ' ')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer hint */}
+            <div className="px-4 py-2.5 flex items-center gap-4" style={{ borderTop: '1px solid #f0f1f5', backgroundColor: '#fafafa' }}>
+              <span className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                  style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>↵</kbd>
+                to open
+              </span>
+              <span className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                  style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>Esc</kbd>
+                to close
+              </span>
+              <span className="text-[11px] text-gray-400 flex items-center gap-1.5 ml-auto">
+                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                  style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>⌘K</kbd>
+                to open anywhere
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Sidebar ── */}
       <aside className="w-[240px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
         style={{ backgroundColor: '#1a2235' }}>
-
-        {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: '1px solid #253047' }}>
           <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
           <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
 
-        {/* Nav */}
         <div className="flex-1 px-3 py-4 overflow-y-auto">
-
           <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
-
           {mainNav.map(item => {
             const active = location.pathname === item.to
             return (
               <Link key={item.to} to={item.to}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
-                style={{
-                  backgroundColor: active ? '#2d3f5e' : 'transparent',
-                  color: active ? '#ffffff' : '#8b9ab8',
-                }}>
+                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
                 <i className={`ti ${item.icon} text-[16px]`} />
                 <span className="flex-1">{item.label}</span>
                 {item.count !== undefined && (
                   <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                    style={{
-                      backgroundColor: active ? '#3d5280' : '#253047',
-                      color: active ? '#93c5fd' : '#6b7a99',
-                    }}>
+                    style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
                     {item.count}
                   </span>
                 )}
@@ -119,16 +254,12 @@ export default function DashboardPage() {
           })}
 
           <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
-
           {workspaceNav.map(item => {
             const active = location.pathname === item.to
             return (
               <Link key={item.to} to={item.to}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
-                style={{
-                  backgroundColor: active ? '#2d3f5e' : 'transparent',
-                  color: active ? '#ffffff' : '#8b9ab8',
-                }}>
+                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
                 <i className={`ti ${item.icon} text-[16px]`} />
                 {item.label}
               </Link>
@@ -136,13 +267,10 @@ export default function DashboardPage() {
           })}
         </div>
 
-        {/* ── User + Logout ── */}
         <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
           <div className="relative">
-            <button
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5 mb-1"
-            >
+            <button onClick={() => setShowUserMenu(!showUserMenu)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5 mb-1">
               <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </div>
@@ -150,8 +278,7 @@ export default function DashboardPage() {
                 <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
                 <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
               </div>
-              <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`}
-                style={{ color: '#6b7a99' }} />
+              <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`} style={{ color: '#6b7a99' }} />
             </button>
 
             {showUserMenu && (
@@ -169,47 +296,33 @@ export default function DashboardPage() {
                         user?.role === 'admin'   ? 'bg-red-100 text-red-600' :
                         user?.role === 'manager' ? 'bg-purple-100 text-purple-600' :
                                                    'bg-green-100 text-green-600'
-                      }`}>
-                        {user?.role}
-                      </span>
+                      }`}>{user?.role}</span>
                     </div>
                   </div>
                 </div>
-
                 <div className="py-1">
-                  <button
-                    onClick={() => { setShowUserMenu(false); navigate('/profile') }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
-                  >
+                  <button onClick={() => { setShowUserMenu(false); navigate('/profile') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
                     <i className="ti ti-user text-base text-gray-400" /> View Profile
                   </button>
-                  <button
-                    onClick={() => { setShowUserMenu(false); navigate('/settings') }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
-                  >
+                  <button onClick={() => { setShowUserMenu(false); navigate('/settings') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
                     <i className="ti ti-settings text-base text-gray-400" /> Settings
                   </button>
-                  <button
-                    onClick={() => { setShowUserMenu(false); navigate('/settings?tab=password') }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
-                  >
+                  <button onClick={() => { setShowUserMenu(false); navigate('/settings?tab=password') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
                     <i className="ti ti-lock text-base text-gray-400" /> Change Password
                   </button>
                   {user?.role === 'admin' && (
-                    <button
-                      onClick={() => { setShowUserMenu(false); navigate('/admin') }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition text-left"
-                    >
+                    <button onClick={() => { setShowUserMenu(false); navigate('/admin') }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition text-left">
                       <i className="ti ti-shield text-base" /> Admin Panel
                     </button>
                   )}
                 </div>
-
                 <div style={{ borderTop: '1px solid #f3f4f6' }}>
-                  <button
-                    onClick={() => { setShowUserMenu(false); handleLogout() }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 transition text-left"
-                  >
+                  <button onClick={() => { setShowUserMenu(false); handleLogout() }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 transition text-left">
                     <i className="ti ti-logout text-base" /> Logout
                   </button>
                 </div>
@@ -226,33 +339,23 @@ export default function DashboardPage() {
         <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
           style={{ borderBottom: '1px solid #e8eaf0' }}>
           <span className="text-[15px] font-semibold text-gray-800">Overview</span>
-
           <div className="flex items-center gap-2">
 
-            {/* ── Bell — SVG icon, gray bg with dark icon, always visible ── */}
+            {/* Bell */}
             <div className="relative">
-              <button
-                onClick={() => setShowNotif(!showNotif)}
-                aria-label="Notifications"
+              <button onClick={() => setShowNotif(!showNotif)} aria-label="Notifications"
                 className="w-9 h-9 rounded-xl flex items-center justify-center transition"
                 style={{
                   backgroundColor: unread > 0 ? '#fef3c7' : '#f3f4f6',
                   border: `1.5px solid ${unread > 0 ? '#f59e0b' : '#d1d5db'}`,
                   color: unread > 0 ? '#d97706' : '#374151',
                 }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = unread > 0 ? '#fde68a' : '#e5e7eb'
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = unread > 0 ? '#fef3c7' : '#f3f4f6'
-                }}
-              >
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = unread > 0 ? '#fde68a' : '#e5e7eb'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = unread > 0 ? '#fef3c7' : '#f3f4f6'}>
                 <BellIcon />
                 {unread > 0 && (
-                  <span
-                    className="absolute -top-1 -right-1 w-[17px] h-[17px] text-white text-[10px] rounded-full flex items-center justify-center font-bold"
-                    style={{ backgroundColor: '#ef4444', border: '2px solid #fff' }}
-                  >
+                  <span className="absolute -top-1 -right-1 w-[17px] h-[17px] text-white text-[10px] rounded-full flex items-center justify-center font-bold"
+                    style={{ backgroundColor: '#ef4444', border: '2px solid #fff' }}>
                     {unread}
                   </span>
                 )}
@@ -273,8 +376,7 @@ export default function DashboardPage() {
                               setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
                             } catch (err) { console.error(err) }
                           }}
-                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-0.5 rounded-lg hover:bg-blue-50 transition"
-                        >
+                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">
                           Mark all read
                         </button>
                       )}
@@ -301,13 +403,16 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Search */}
-            <button className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] text-gray-500 hover:bg-gray-50 transition font-medium"
+            {/* ✅ Search button — now opens modal */}
+            <button
+              onClick={() => setShowSearch(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] text-gray-500 hover:bg-gray-50 transition font-medium"
               style={{ border: '1px solid #e8eaf0' }}>
               <i className="ti ti-search text-sm" /> Search
+              <kbd className="ml-1 text-[10px] px-1.5 py-0.5 rounded font-medium text-gray-300"
+                style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>⌘K</kbd>
             </button>
 
-            {/* New project — admin and manager only */}
             {(user?.role === 'admin' || user?.role === 'manager') && (
               <Link to="/projects/new"
                 className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold rounded-xl transition">
@@ -319,8 +424,6 @@ export default function DashboardPage() {
 
         {/* Content */}
         <main className="flex-1 p-8">
-
-          {/* Greeting */}
           <div className="mb-8">
             <h1 className="text-[26px] font-bold text-gray-900">
               Good day, {user?.name?.split(' ')[0] || 'there'} 👋
@@ -330,7 +433,6 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          {/* Stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-9">
             {[
               { icon: 'ti-folder',    label: 'Total projects',  value: projects.length, pct: Math.min((projects.length / 10) * 100, 100), badge: '+1 this month',        iconBg: '#eff6ff', iconColor: '#2563eb', barColor: '#2563eb' },
@@ -358,7 +460,6 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Projects header + filter */}
           <div className="flex justify-between items-center mb-5">
             <h2 className="text-[16px] font-bold text-gray-900">Your projects</h2>
             <div className="flex gap-1.5">
@@ -375,7 +476,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Projects grid */}
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {[1, 2, 3].map(i => (
