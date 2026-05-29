@@ -1,5 +1,36 @@
 const db = require('../config/db');
 
+// ─── helper: notify all admins and managers ───────────────────────────────
+const notifyAdminsAndManagers = async (message, reference_id, excludeUserId = null) => {
+  const [admins] = await db.query(
+    `SELECT id FROM users WHERE role IN ('admin', 'manager') ${excludeUserId ? 'AND id != ?' : ''}`,
+    excludeUserId ? [excludeUserId] : []
+  );
+  for (const admin of admins) {
+    await db.query(
+      'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+      [admin.id, 'system', message, reference_id]
+    );
+  }
+};
+
+// ─── helper: notify all members of a project ─────────────────────────────
+const notifyProjectMembers = async (project_id, message, reference_id, excludeUserId = null) => {
+  const [members] = await db.query(
+    `SELECT DISTINCT u.id FROM users u
+     INNER JOIN team_members tm ON tm.user_id = u.id
+     INNER JOIN projects p ON p.team_id = tm.team_id
+     WHERE p.id = ? ${excludeUserId ? 'AND u.id != ?' : ''}`,
+    excludeUserId ? [project_id, excludeUserId] : [project_id]
+  );
+  for (const member of members) {
+    await db.query(
+      'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+      [member.id, 'system', message, reference_id]
+    );
+  }
+};
+
 // CREATE task
 const createTask = async (req, res) => {
   try {
@@ -20,12 +51,20 @@ const createTask = async (req, res) => {
       [req.user.id, project_id, result.insertId, 'task_created', `Task "${title}" was created`]
     );
 
+    // Notify assigned user
     if (assigned_to) {
       await db.query(
         'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
         [assigned_to, 'task_assigned', `You have been assigned a new task: "${title}"`, result.insertId]
       );
     }
+
+    // Notify admins/managers that a new task was created
+    await notifyAdminsAndManagers(
+      `New task created: "${title}" in project by ${req.user.name}`,
+      result.insertId,
+      req.user.id
+    );
 
     const io = req.app.get('io');
     io.to(`project_${project_id}`).emit('task_created', {
@@ -116,6 +155,8 @@ const updateTask = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
+    const task = existing[0];
+
     await db.query(
       `UPDATE tasks SET
         title = COALESCE(?, title),
@@ -129,24 +170,42 @@ const updateTask = async (req, res) => {
       [title, description, assigned_to, priority, due_date, status, position, req.params.id]
     );
 
-    if (status && status !== existing[0].status) {
+    // Status changed
+    if (status && status !== task.status) {
       await db.query(
         'INSERT INTO activity_logs (user_id, project_id, task_id, action, details) VALUES (?, ?, ?, ?, ?)',
-        [req.user.id, existing[0].project_id, req.params.id, 'task_moved',
-         `Task "${existing[0].title}" moved to ${status}`]
+        [req.user.id, task.project_id, req.params.id, 'task_moved',
+         `Task "${task.title}" moved to ${status}`]
       );
 
-      if (existing[0].assigned_to) {
+      // Notify assigned user
+      if (task.assigned_to) {
         await db.query(
           'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
-          [existing[0].assigned_to, 'task_updated',
-           `Task "${existing[0].title}" status changed to ${status}`, req.params.id]
+          [task.assigned_to, 'task_updated',
+           `Task "${task.title}" status changed to ${status}`, req.params.id]
         );
       }
+
+      // Notify admins/managers
+      await notifyAdminsAndManagers(
+        `Task "${task.title}" status changed to ${status} by ${req.user.name}`,
+        req.params.id,
+        req.user.id
+      );
+    }
+
+    // Reassigned to someone new
+    if (assigned_to && assigned_to !== task.assigned_to) {
+      await db.query(
+        'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+        [assigned_to, 'task_assigned',
+         `You have been assigned to task: "${task.title}"`, req.params.id]
+      );
     }
 
     const io = req.app.get('io');
-    io.to(`project_${existing[0].project_id}`).emit('task_updated', {
+    io.to(`project_${task.project_id}`).emit('task_updated', {
       task_id: req.params.id, status, position
     });
 
@@ -165,11 +224,20 @@ const deleteTask = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
+    const task = existing[0];
+
     await db.query('DELETE FROM tasks WHERE id = ?', [req.params.id]);
 
+    // Notify admins/managers
+    await notifyAdminsAndManagers(
+      `Task "${task.title}" was deleted by ${req.user.name}`,
+      task.project_id,
+      req.user.id
+    );
+
     const io = req.app.get('io');
-    io.to(`project_${existing[0].project_id}`).emit('task_deleted', {
-      task_id: req.params.id, project_id: existing[0].project_id
+    io.to(`project_${task.project_id}`).emit('task_deleted', {
+      task_id: req.params.id, project_id: task.project_id
     });
 
     return res.status(200).json({ success: true, message: 'Task deleted.' });
@@ -187,18 +255,37 @@ const addComment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Comment content is required.' });
     }
 
-    const [task] = await db.query('SELECT * FROM tasks WHERE id = ?', [req.params.id]);
-    if (task.length === 0) {
+    const [taskRows] = await db.query('SELECT * FROM tasks WHERE id = ?', [req.params.id]);
+    if (taskRows.length === 0) {
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
+
+    const task = taskRows[0];
 
     const [result] = await db.query(
       'INSERT INTO comments (task_id, user_id, content) VALUES (?, ?, ?)',
       [req.params.id, req.user.id, content]
     );
 
+    // Notify task assignee if commenter is not the assignee
+    if (task.assigned_to && task.assigned_to !== req.user.id) {
+      await db.query(
+        'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+        [task.assigned_to, 'comment',
+         `${req.user.name} commented on task "${task.title}": "${content.substring(0, 60)}${content.length > 60 ? '...' : ''}"`,
+         req.params.id]
+      );
+    }
+
+    // Notify admins/managers about the comment
+    await notifyAdminsAndManagers(
+      `${req.user.name} commented on task "${task.title}": "${content.substring(0, 60)}${content.length > 60 ? '...' : ''}"`,
+      req.params.id,
+      req.user.id
+    );
+
     const io = req.app.get('io');
-    io.to(`project_${task[0].project_id}`).emit('comment_added', {
+    io.to(`project_${task.project_id}`).emit('comment_added', {
       task_id: req.params.id,
       comment: { id: result.insertId, content, user_id: req.user.id, user_name: req.user.name }
     });
@@ -301,15 +388,11 @@ const markNotificationsRead = async (req, res) => {
 const getMyTasks = async (req, res) => {
   try {
     const [tasks] = await db.query(
-      `SELECT
-        t.*,
-        p.name  AS project_name,
-        u.name  AS assignee_name
+      `SELECT t.*, p.name AS project_name, u.name AS assignee_name
        FROM tasks t
        LEFT JOIN projects p ON t.project_id = p.id
-       LEFT JOIN users   u ON t.assigned_to = u.id
-       WHERE t.assigned_to = ?
-          OR t.created_by  = ?
+       LEFT JOIN users u ON t.assigned_to = u.id
+       WHERE t.assigned_to = ? OR t.created_by = ?
        ORDER BY t.due_date ASC, t.created_at DESC`,
       [req.user.id, req.user.id]
     );

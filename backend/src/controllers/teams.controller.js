@@ -13,7 +13,6 @@ const createTeam = async (req, res) => {
       [name, description || null, req.user.id]
     );
 
-    // Add creator as owner in team_members
     await db.query(
       'INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)',
       [result.insertId, req.user.id, 'owner']
@@ -82,7 +81,6 @@ const addMember = async (req, res) => {
       return res.status(400).json({ success: false, message: 'User ID is required.' });
     }
 
-    // Check if already a member
     const [existing] = await db.query(
       'SELECT id FROM team_members WHERE team_id = ? AND user_id = ?',
       [req.params.id, user_id]
@@ -96,6 +94,31 @@ const addMember = async (req, res) => {
       [req.params.id, user_id, role || 'member']
     );
 
+    // Get team name for notification message
+    const [teams] = await db.query('SELECT name FROM teams WHERE id = ?', [req.params.id]);
+    const teamName = teams[0]?.name || 'a team';
+
+    // Notify the added user
+    await db.query(
+      'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+      [user_id, 'team', `You have been added to team "${teamName}" by ${req.user.name}`, req.params.id]
+    );
+
+    // Notify admins/managers
+    const [admins] = await db.query(
+      `SELECT id FROM users WHERE role IN ('admin', 'manager') AND id != ?`,
+      [req.user.id]
+    );
+    const [addedUser] = await db.query('SELECT name FROM users WHERE id = ?', [user_id]);
+    for (const admin of admins) {
+      await db.query(
+        'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+        [admin.id, 'team',
+         `${addedUser[0]?.name} was added to team "${teamName}" by ${req.user.name}`,
+         req.params.id]
+      );
+    }
+
     return res.status(201).json({ success: true, message: 'Member added successfully.' });
   } catch (error) {
     console.error('AddMember error:', error.message);
@@ -106,10 +129,38 @@ const addMember = async (req, res) => {
 // REMOVE member from team
 const removeMember = async (req, res) => {
   try {
+    // Get team and user info before deleting
+    const [teams] = await db.query('SELECT name FROM teams WHERE id = ?', [req.params.id]);
+    const [removedUser] = await db.query('SELECT name FROM users WHERE id = ?', [req.params.userId]);
+    const teamName = teams[0]?.name || 'a team';
+
     await db.query(
       'DELETE FROM team_members WHERE team_id = ? AND user_id = ?',
       [req.params.id, req.params.userId]
     );
+
+    // Notify the removed user
+    await db.query(
+      'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+      [req.params.userId, 'team',
+       `You have been removed from team "${teamName}" by ${req.user.name}`,
+       req.params.id]
+    );
+
+    // Notify admins/managers
+    const [admins] = await db.query(
+      `SELECT id FROM users WHERE role IN ('admin', 'manager') AND id != ?`,
+      [req.user.id]
+    );
+    for (const admin of admins) {
+      await db.query(
+        'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+        [admin.id, 'team',
+         `${removedUser[0]?.name} was removed from team "${teamName}" by ${req.user.name}`,
+         req.params.id]
+      );
+    }
+
     return res.status(200).json({ success: true, message: 'Member removed.' });
   } catch (error) {
     console.error('RemoveMember error:', error.message);

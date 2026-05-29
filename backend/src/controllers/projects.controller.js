@@ -1,5 +1,36 @@
 const db = require('../config/db');
 
+// ─── helper: notify all admins and managers ───────────────────────────────
+const notifyAdminsAndManagers = async (message, reference_id, excludeUserId = null) => {
+  const [admins] = await db.query(
+    `SELECT id FROM users WHERE role IN ('admin', 'manager') ${excludeUserId ? 'AND id != ?' : ''}`,
+    excludeUserId ? [excludeUserId] : []
+  );
+  for (const admin of admins) {
+    await db.query(
+      'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+      [admin.id, 'system', message, reference_id]
+    );
+  }
+};
+
+// ─── helper: notify all members of a project ─────────────────────────────
+const notifyProjectMembers = async (project_id, message, reference_id, excludeUserId = null) => {
+  const [members] = await db.query(
+    `SELECT DISTINCT u.id FROM users u
+     INNER JOIN team_members tm ON tm.user_id = u.id
+     INNER JOIN projects p ON p.team_id = tm.team_id
+     WHERE p.id = ? ${excludeUserId ? 'AND u.id != ?' : ''}`,
+    excludeUserId ? [project_id, excludeUserId] : [project_id]
+  );
+  for (const member of members) {
+    await db.query(
+      'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
+      [member.id, 'system', message, reference_id]
+    );
+  }
+};
+
 // CREATE project
 const createProject = async (req, res) => {
   try {
@@ -20,6 +51,14 @@ const createProject = async (req, res) => {
         [req.user.id, result.insertId, 'project_created', `Project "${name}" was created`]
       );
     } catch (logErr) { console.log('Activity log warning:', logErr.message); }
+
+    // Notify all team members about the new project
+    await notifyProjectMembers(
+      result.insertId,
+      `New project "${name}" has been created by ${req.user.name}`,
+      result.insertId,
+      req.user.id
+    );
 
     return res.status(201).json({
       success: true,
@@ -78,6 +117,14 @@ const getProjectById = async (req, res) => {
 const updateProject = async (req, res) => {
   try {
     const { name, description, status, start_date, end_date } = req.body;
+
+    const [existing] = await db.query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+
+    const project = existing[0];
+
     await db.query(
       `UPDATE projects SET
         name        = COALESCE(?, name),
@@ -88,6 +135,24 @@ const updateProject = async (req, res) => {
        WHERE id = ?`,
       [name, description, status, start_date, end_date, req.params.id]
     );
+
+    // Status changed — notify all project members
+    if (status && status !== project.status) {
+      await notifyProjectMembers(
+        req.params.id,
+        `Project "${project.name}" status changed to ${status.replace('_', ' ')} by ${req.user.name}`,
+        req.params.id,
+        req.user.id
+      );
+
+      // Also notify admins/managers
+      await notifyAdminsAndManagers(
+        `Project "${project.name}" status changed to ${status.replace('_', ' ')} by ${req.user.name}`,
+        req.params.id,
+        req.user.id
+      );
+    }
+
     return res.status(200).json({ success: true, message: 'Project updated.' });
   } catch (error) {
     console.error('UpdateProject error:', error.message);
@@ -98,7 +163,23 @@ const updateProject = async (req, res) => {
 // DELETE project
 const deleteProject = async (req, res) => {
   try {
+    const [existing] = await db.query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+
+    const project = existing[0];
+
+    // Notify all members before deleting
+    await notifyProjectMembers(
+      req.params.id,
+      `Project "${project.name}" has been deleted by ${req.user.name}`,
+      req.params.id,
+      req.user.id
+    );
+
     await db.query('DELETE FROM projects WHERE id = ?', [req.params.id]);
+
     return res.status(200).json({ success: true, message: 'Project deleted.' });
   } catch (error) {
     console.error('DeleteProject error:', error.message);
@@ -127,16 +208,32 @@ const getProjectActivity = async (req, res) => {
 // ARCHIVE project
 const archiveProject = async (req, res) => {
   try {
+    const [existing] = await db.query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+
+    const project = existing[0];
+
     await db.query(
       'UPDATE projects SET status = "completed" WHERE id = ?',
       [req.params.id]
     );
+
     try {
       await db.query(
         'INSERT INTO activity_logs (user_id, project_id, action, details) VALUES (?, ?, ?, ?)',
         [req.user.id, req.params.id, 'project_archived', 'Project was archived']
       );
     } catch (logErr) { console.log('Log warning:', logErr.message); }
+
+    // Notify all project members it was archived
+    await notifyProjectMembers(
+      req.params.id,
+      `Project "${project.name}" has been archived by ${req.user.name}`,
+      req.params.id,
+      req.user.id
+    );
 
     return res.status(200).json({ success: true, message: 'Project archived.' });
   } catch (error) {
@@ -148,40 +245,35 @@ const archiveProject = async (req, res) => {
 // GET all activity logs — admin only
 const getAllActivity = async (req, res) => {
   try {
-    const limit  = parseInt(req.query.limit)  || 50
-    const offset = parseInt(req.query.offset) || 0
-    const action = req.query.action           || ''
+    const limit  = parseInt(req.query.limit)  || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    const action = req.query.action           || '';
 
     let query = `
-      SELECT
-        al.*,
-        u.name  AS user_name,
-        u.role  AS user_role,
-        p.name  AS project_name,
-        t.title AS task_title
+      SELECT al.*, u.name AS user_name, u.role AS user_role,
+             p.name AS project_name, t.title AS task_title
       FROM activity_logs al
       LEFT JOIN users    u ON al.user_id    = u.id
       LEFT JOIN projects p ON al.project_id = p.id
       LEFT JOIN tasks    t ON al.task_id    = t.id
-    `
-    const params = []
-    if (action) { query += ' WHERE al.action = ?'; params.push(action) }
-    query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?'
-    params.push(limit, offset)
+    `;
+    const params = [];
+    if (action) { query += ' WHERE al.action = ?'; params.push(action); }
+    query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
-    const [logs] = await db.query(query, params)
-
+    const [logs] = await db.query(query, params);
     const [[{ total }]] = await db.query(
       `SELECT COUNT(*) AS total FROM activity_logs ${action ? 'WHERE action = ?' : ''}`,
       action ? [action] : []
-    )
+    );
 
-    return res.status(200).json({ success: true, logs, total })
+    return res.status(200).json({ success: true, logs, total });
   } catch (error) {
-    console.error('GetAllActivity error:', error.message)
-    return res.status(500).json({ success: false, message: 'Server error.' })
+    console.error('GetAllActivity error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
-}
+};
 
 module.exports = {
   createProject,
@@ -192,4 +284,4 @@ module.exports = {
   getProjectActivity,
   archiveProject,
   getAllActivity,
-}
+};
