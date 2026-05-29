@@ -3,8 +3,8 @@ import { createContext, useContext, useState, useEffect } from 'react'
 const AuthContext = createContext()
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
-  const [token, setToken] = useState(localStorage.getItem('token'))
+  const [user, setUser]       = useState(null)
+  const [token, setToken]     = useState(localStorage.getItem('token'))
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -29,8 +29,16 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user')
   }
 
+  const updateUser = (updatedFields) => {
+    setUser(prev => {
+      const merged = { ...prev, ...updatedFields }
+      localStorage.setItem('user', JSON.stringify(merged))
+      return merged
+    })
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   )

@@ -183,10 +183,13 @@ export default function DashboardPage() {
                     <button key={p.id}
                       onClick={() => { navigate(`/projects/${p.id}`); setShowSearch(false) }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition text-left">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                        style={{ backgroundColor: '#eff6ff', color: '#1e40af' }}>
-                        {p.name?.charAt(0)?.toUpperCase()}
-                      </div>
+                     <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+  {user?.avatar
+    ? <img src={`http://localhost:5000${user.avatar}`} alt="avatar"
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    : user?.name?.charAt(0)?.toUpperCase() || 'U'
+  }
+</div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p>
                         <p className="text-[11px] text-gray-400 truncate">{p.team_name || 'No team'}</p>

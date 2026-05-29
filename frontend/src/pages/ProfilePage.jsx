@@ -75,7 +75,6 @@ const inputStyle = {
   boxSizing: 'border-box',
 }
 
-// ── Helper: build full avatar URL from stored path ────────────────────────────
 const getAvatarUrl = (avatar) => {
   if (!avatar) return null
   if (avatar.startsWith('http')) return avatar
@@ -83,9 +82,9 @@ const getAvatarUrl = (avatar) => {
 }
 
 export default function ProfilePage() {
-  const { user, login } = useAuth()
-  const navigate        = useNavigate()
-  const cfg             = ROLE_CONFIG[user?.role] ?? ROLE_CONFIG.member
+  const { user, updateUser } = useAuth()   // ← use updateUser instead of login
+  const navigate = useNavigate()
+  const cfg = ROLE_CONFIG[user?.role] ?? ROLE_CONFIG.member
 
   const [form, setForm]             = useState({ name: user?.name || '', email: user?.email || '' })
   const [loading, setLoading]       = useState(false)
@@ -94,11 +93,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab]   = useState('profile')
   const [focusField, setFocusField] = useState(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
-
-  // ── Load avatar from saved user on first render ───────────────────────────
-  const [avatarPreview, setAvatarPreview] = useState(
-    getAvatarUrl(user?.avatar)
-  )
+  const [avatarPreview, setAvatarPreview] = useState(getAvatarUrl(user?.avatar))
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
@@ -112,19 +107,19 @@ export default function ProfilePage() {
     setLoading(true)
     try {
       await api.put(`/users/${user.id}`, form)
-      login({ ...user, name: form.name, email: form.email }, localStorage.getItem('token'))
+      // ── updateUser persists name/email to localStorage ──
+      updateUser({ name: form.name, email: form.email })
       showMessage('Profile updated successfully')
     } catch (err) {
       showMessage(err.response?.data?.message || 'Failed to update profile.', true)
     } finally { setLoading(false) }
   }
 
-  // ── Avatar upload: preview instantly, save to server, persist in context ──
   const handleAvatarChange = async (e) => {
     const file = e.target.files[0]
     if (!file) return
 
-    // Instant local preview while uploading
+    // Show instant preview while uploading
     setAvatarPreview(URL.createObjectURL(file))
 
     try {
@@ -136,16 +131,16 @@ export default function ProfilePage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      // Save avatar URL into context + localStorage so it survives navigation
-      const updatedUser = { ...user, avatar: res.data.avatar }
-      login(updatedUser, localStorage.getItem('token'))
+      // ── Save avatar to context + localStorage so it survives logout/login ──
+      updateUser({ avatar: res.data.avatar })
 
-      // Switch preview from blob URL to real server URL
+      // Switch from blob URL to real server URL
       setAvatarPreview(getAvatarUrl(res.data.avatar))
 
       showMessage('Photo updated successfully')
     } catch {
       showMessage('Failed to save photo to server.', true)
+      setAvatarPreview(getAvatarUrl(user?.avatar))
     } finally {
       setAvatarUploading(false)
     }
@@ -334,8 +329,7 @@ export default function ProfilePage() {
         <div style={{
           width: 30, height: 30, borderRadius: 8, background: cfg.heroBg,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 13, fontWeight: 700, color: '#fff',
-          overflow: 'hidden',
+          fontSize: 13, fontWeight: 700, color: '#fff', overflow: 'hidden',
         }}>
           {avatarPreview
             ? <img src={avatarPreview} alt="nav-avatar"
@@ -352,7 +346,6 @@ export default function ProfilePage() {
           <div style={s.heroOrb1} />
           <div style={s.heroOrb2} />
 
-          {/* Clickable avatar */}
           <div
             style={s.avatarWrapper}
             onClick={() => document.getElementById('avatar-upload').click()}
@@ -394,7 +387,7 @@ export default function ProfilePage() {
         {/* Stats */}
         <div style={s.statsRow}>
           {[
-            { label: 'Member Since', value: '2024',     sub: 'Active account' },
+            { label: 'Member Since', value: new Date(user?.created_at || Date.now()).getFullYear(), sub: 'Active account' },
             { label: 'Role',         value: cfg.label,  sub: 'Current access level' },
             { label: 'Status',       value: '● Active', sub: 'Verified email', color: '#16a34a' },
           ].map((c, i) => (
@@ -528,7 +521,6 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   )

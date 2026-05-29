@@ -177,9 +177,13 @@ export default function TasksPage() {
                 <div className="px-4 py-3 border-b border-gray-100"
                   style={{ background: 'linear-gradient(to right, #eff6ff, #eef2ff)' }}>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm">
-                      {user?.name?.charAt(0)?.toUpperCase()}
-                    </div>
+                   <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+  {user?.avatar
+    ? <img src={`http://localhost:5000${user.avatar}`} alt="avatar"
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    : user?.name?.charAt(0)?.toUpperCase()
+  }
+</div>
                     <div>
                       <p className="text-sm font-bold text-gray-800">{user?.name}</p>
                       <p className="text-xs text-gray-400">{user?.email}</p>

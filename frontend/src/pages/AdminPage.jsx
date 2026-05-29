@@ -198,9 +198,13 @@ export default function AdminPage() {
         <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
           <div onClick={() => navigate('/profile')}
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/5 transition mb-1">
-            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
-              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+  {user?.avatar
+    ? <img src={`http://localhost:5000${user.avatar}`} alt="avatar"
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    : user?.name?.charAt(0)?.toUpperCase()
+  }
+</div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
               <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
