@@ -214,11 +214,16 @@ const addComment = async (req, res) => {
   }
 };
 
-// GET notifications
+// GET notifications — joins tasks to get project_id for navigation
 const getNotifications = async (req, res) => {
   try {
     const [notifications] = await db.query(
-      'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20',
+      `SELECT n.*, t.project_id
+       FROM notifications n
+       LEFT JOIN tasks t ON n.reference_id = t.id
+       WHERE n.user_id = ?
+       ORDER BY n.created_at DESC
+       LIMIT 20`,
       [req.user.id]
     );
     return res.status(200).json({ success: true, notifications });

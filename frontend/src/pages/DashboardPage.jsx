@@ -12,30 +12,26 @@ const BellIcon = () => (
   </svg>
 )
 
-// ── Helper: build full avatar URL from stored path ─────────────────────────
 const getAvatarUrl = (avatar) => {
   if (!avatar) return null
   if (avatar.startsWith('http')) return avatar
   return `http://localhost:5000${avatar}`
 }
 
-// ── Reusable Avatar component ──────────────────────────────────────────────
 const Avatar = ({ user, size = 8, rounded = 'lg' }) => {
   const avatarUrl = getAvatarUrl(user?.avatar)
   const initials  = user?.name?.charAt(0)?.toUpperCase() || 'U'
-  const px        = size * 4  // Tailwind w-8 = 32px, w-10 = 40px
+  const px        = size * 4
 
   return (
-    <div
-      style={{
-        width: px, height: px,
-        borderRadius: rounded === 'full' ? '50%' : 10,
-        backgroundColor: '#3b82f6',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        overflow: 'hidden', flexShrink: 0,
-        fontSize: px * 0.35, fontWeight: 700, color: '#fff',
-      }}
-    >
+    <div style={{
+      width: px, height: px,
+      borderRadius: rounded === 'full' ? '50%' : 10,
+      backgroundColor: '#3b82f6',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', flexShrink: 0,
+      fontSize: px * 0.35, fontWeight: 700, color: '#fff',
+    }}>
       {avatarUrl
         ? <img src={avatarUrl} alt="avatar"
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -48,16 +44,14 @@ export default function DashboardPage() {
   const { user, logout } = useAuth()
   const navigate  = useNavigate()
   const location  = useLocation()
-  const [projects, setProjects]         = useState([])
+  const [projects, setProjects]           = useState([])
   const [notifications, setNotifications] = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [showNotif, setShowNotif]       = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const [filter, setFilter]             = useState('all')
-
-  // ── Search state ──
-  const [showSearch, setShowSearch]   = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading]             = useState(true)
+  const [showNotif, setShowNotif]         = useState(false)
+  const [showUserMenu, setShowUserMenu]   = useState(false)
+  const [filter, setFilter]               = useState('all')
+  const [showSearch, setShowSearch]       = useState(false)
+  const [searchQuery, setSearchQuery]     = useState('')
   const searchInputRef = useRef(null)
 
   useEffect(() => { fetchProjects(); fetchNotifications() }, [])
@@ -98,10 +92,10 @@ export default function DashboardPage() {
   }
 
   const handleLogout = () => { logout(); navigate('/login') }
-  const unread          = notifications.filter(n => !n.is_read).length
-  const activeCount     = projects.filter(p => p.status === 'active').length
-  const totalTasks      = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
-  const activePct       = projects.length > 0 ? Math.round((activeCount / projects.length) * 100) : 0
+  const unread           = notifications.filter(n => !n.is_read).length
+  const activeCount      = projects.filter(p => p.status === 'active').length
+  const totalTasks       = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
+  const activePct        = projects.length > 0 ? Math.round((activeCount / projects.length) * 100) : 0
   const filteredProjects = filter === 'all' ? projects : projects.filter(p => p.status === filter)
 
   const searchResults = searchQuery.trim().length === 0 ? [] : projects.filter(p =>
@@ -143,16 +137,12 @@ export default function DashboardPage() {
 
       {/* ── Search Modal ── */}
       {showSearch && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-24"
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-24"
           style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}
-          onClick={() => setShowSearch(false)}
-        >
-          <div
-            className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
+          onClick={() => setShowSearch(false)}>
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
             style={{ border: '1px solid #e8eaf0' }}
-            onClick={e => e.stopPropagation()}
-          >
+            onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid #f0f1f5' }}>
               <i className="ti ti-search text-gray-400 text-[18px] shrink-0" />
               <input
@@ -164,15 +154,12 @@ export default function DashboardPage() {
                 className="flex-1 text-[14px] text-gray-800 placeholder-gray-400 focus:outline-none bg-transparent"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')}
-                  className="text-gray-300 hover:text-gray-500 transition">
+                <button onClick={() => setSearchQuery('')} className="text-gray-300 hover:text-gray-500 transition">
                   <i className="ti ti-x text-sm" />
                 </button>
               )}
               <kbd className="text-[11px] px-2 py-0.5 rounded-lg font-medium text-gray-400"
-                style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>
-                Esc
-              </kbd>
+                style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>Esc</kbd>
             </div>
 
             <div className="max-h-80 overflow-y-auto">
@@ -183,13 +170,10 @@ export default function DashboardPage() {
                     <button key={p.id}
                       onClick={() => { navigate(`/projects/${p.id}`); setShowSearch(false) }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition text-left">
-                     <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
-  {user?.avatar
-    ? <img src={`http://localhost:5000${user.avatar}`} alt="avatar"
-        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-    : user?.name?.charAt(0)?.toUpperCase() || 'U'
-  }
-</div>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{ backgroundColor: '#eff6ff', color: '#1e40af' }}>
+                        {p.name?.charAt(0)?.toUpperCase()}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p>
                         <p className="text-[11px] text-gray-400 truncate">{p.team_name || 'No team'}</p>
@@ -257,14 +241,11 @@ export default function DashboardPage() {
       {/* ── Sidebar ── */}
       <aside className="w-[240px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
         style={{ backgroundColor: '#1a2235' }}>
-
-        {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: '1px solid #253047' }}>
           <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
           <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
 
-        {/* Nav links */}
         <div className="flex-1 px-3 py-4 overflow-y-auto">
           <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
           {mainNav.map(item => {
@@ -299,15 +280,11 @@ export default function DashboardPage() {
           })}
         </div>
 
-        {/* ── Bottom user section ── */}
         <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
           <div className="relative">
             <button onClick={() => setShowUserMenu(!showUserMenu)}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5 mb-1">
-
-              {/* ✅ FIX 1: Avatar in sidebar bottom button */}
               <Avatar user={user} size={8} />
-
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
                 <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
@@ -315,16 +292,12 @@ export default function DashboardPage() {
               <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`} style={{ color: '#6b7a99' }} />
             </button>
 
-            {/* ── User menu popup ── */}
             {showUserMenu && (
               <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-gray-100"
                   style={{ background: 'linear-gradient(to right, #eff6ff, #eef2ff)' }}>
                   <div className="flex items-center gap-3">
-
-                    {/* ✅ FIX 2: Avatar in popup header */}
                     <Avatar user={user} size={10} />
-
                     <div>
                       <p className="text-sm font-bold text-gray-800">{user?.name}</p>
                       <p className="text-xs text-gray-400">{user?.email}</p>
@@ -336,7 +309,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
-
                 <div className="py-1">
                   <button onClick={() => { setShowUserMenu(false); navigate('/profile') }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
@@ -423,14 +395,27 @@ export default function DashboardPage() {
                     {notifications.length === 0 ? (
                       <p className="text-center py-8 text-xs text-gray-400">No notifications</p>
                     ) : notifications.slice(0, 10).map(n => (
-                      <div key={n.id}
-                        className={`px-4 py-3 hover:bg-gray-50 transition ${!n.is_read ? 'bg-blue-50/50' : ''}`}
+                      // ✅ Clickable — navigates to project when project_id is available
+                      <div
+                        key={n.id}
+                        onClick={() => {
+                          if (n.project_id) {
+                            setShowNotif(false)
+                            navigate(`/projects/${n.project_id}`)
+                          }
+                        }}
+                        className={`px-4 py-3 transition ${!n.is_read ? 'bg-blue-50/50' : ''} ${n.project_id ? 'cursor-pointer hover:bg-blue-50' : 'hover:bg-gray-50'}`}
                         style={{ borderBottom: '1px solid #f5f6fa' }}>
                         <div className="flex items-start gap-2">
                           {!n.is_read && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <p className="text-xs text-gray-700">{n.message}</p>
-                            <p className="text-[11px] text-gray-400 mt-0.5">{new Date(n.created_at).toLocaleString()}</p>
+                            <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
+                              {new Date(n.created_at).toLocaleString()}
+                              {n.project_id && (
+                                <span className="text-blue-400 font-medium">· View project →</span>
+                              )}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -441,8 +426,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Search */}
-            <button
-              onClick={() => setShowSearch(true)}
+            <button onClick={() => setShowSearch(true)}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] text-gray-500 hover:bg-gray-50 transition font-medium"
               style={{ border: '1px solid #e8eaf0' }}>
               <i className="ti ti-search text-sm" /> Search
