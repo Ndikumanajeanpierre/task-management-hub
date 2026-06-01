@@ -9,16 +9,18 @@ const {
   getProjectActivity,
   archiveProject,
   getAllActivity,
+  getProjectStats,
 } = require('../controllers/projects.controller');
 const { auth, requireRole } = require('../middleware/auth');
 
-router.post('/',              auth, requireRole('admin', 'manager'), createProject);
-router.get('/',               auth,                                  getAllProjects);
-router.get('/activity',       auth, requireRole('admin'),            getAllActivity);  // ← NEW — must be before /:id
-router.get('/:id',            auth,                                  getProjectById);
-router.put('/:id',            auth, requireRole('admin', 'manager'), updateProject);
-router.delete('/:id',         auth, requireRole('admin', 'manager'), deleteProject);
-router.get('/:id/activity',   auth,                                  getProjectActivity);
-router.patch('/:id/archive',  auth, requireRole('admin', 'manager'), archiveProject);
+router.post('/',             auth, requireRole('admin', 'manager'), createProject);
+router.get('/',              auth,                                  getAllProjects);
+router.get('/activity',      auth, requireRole('admin'),            getAllActivity);
+router.get('/stats',         auth,                                  getProjectStats);
+router.get('/:id',           auth,                                  getProjectById);
+router.put('/:id',           auth, requireRole('admin', 'manager'), updateProject);
+router.delete('/:id',        auth, requireRole('admin', 'manager'), deleteProject);
+router.get('/:id/activity',  auth,                                  getProjectActivity);
+router.patch('/:id/archive', auth, requireRole('admin', 'manager'), archiveProject);
 
 module.exports = router;

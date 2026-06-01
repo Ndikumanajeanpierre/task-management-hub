@@ -52,7 +52,6 @@ const createProject = async (req, res) => {
       );
     } catch (logErr) { console.log('Activity log warning:', logErr.message); }
 
-    // Notify all team members about the new project
     await notifyProjectMembers(
       result.insertId,
       `New project "${name}" has been created by ${req.user.name}`,
@@ -136,7 +135,6 @@ const updateProject = async (req, res) => {
       [name, description, status, start_date, end_date, req.params.id]
     );
 
-    // Status changed — notify all project members
     if (status && status !== project.status) {
       await notifyProjectMembers(
         req.params.id,
@@ -144,8 +142,6 @@ const updateProject = async (req, res) => {
         req.params.id,
         req.user.id
       );
-
-      // Also notify admins/managers
       await notifyAdminsAndManagers(
         `Project "${project.name}" status changed to ${status.replace('_', ' ')} by ${req.user.name}`,
         req.params.id,
@@ -170,7 +166,6 @@ const deleteProject = async (req, res) => {
 
     const project = existing[0];
 
-    // Notify all members before deleting
     await notifyProjectMembers(
       req.params.id,
       `Project "${project.name}" has been deleted by ${req.user.name}`,
@@ -227,7 +222,6 @@ const archiveProject = async (req, res) => {
       );
     } catch (logErr) { console.log('Log warning:', logErr.message); }
 
-    // Notify all project members it was archived
     await notifyProjectMembers(
       req.params.id,
       `Project "${project.name}" has been archived by ${req.user.name}`,
@@ -275,6 +269,43 @@ const getAllActivity = async (req, res) => {
   }
 };
 
+// GET real project stats for reports
+const getProjectStats = async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    const [projects] = await db.query(`
+      SELECT
+        p.id,
+        p.name,
+        p.status,
+        p.end_date,
+        COUNT(t.id) AS total_tasks,
+        SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS completed_tasks,
+        SUM(CASE WHEN t.due_date < ? AND t.status != 'done' THEN 1 ELSE 0 END) AS overdue_tasks
+      FROM projects p
+      LEFT JOIN tasks t ON p.id = t.project_id
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `, [today]);
+
+    const stats = projects.map(p => ({
+      ...p,
+      total_tasks:     parseInt(p.total_tasks)     || 0,
+      completed_tasks: parseInt(p.completed_tasks) || 0,
+      overdue_tasks:   parseInt(p.overdue_tasks)   || 0,
+      completion_rate: p.total_tasks > 0
+        ? Math.round((parseInt(p.completed_tasks) / parseInt(p.total_tasks)) * 100)
+        : 0,
+    }));
+
+    return res.status(200).json({ success: true, stats });
+  } catch (error) {
+    console.error('GetProjectStats error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
 module.exports = {
   createProject,
   getAllProjects,
@@ -284,4 +315,5 @@ module.exports = {
   getProjectActivity,
   archiveProject,
   getAllActivity,
+  getProjectStats,
 };

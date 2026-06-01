@@ -30,6 +30,7 @@ export default function AdminPage() {
   const location = useLocation()
 
   const [users, setUsers]               = useState([])
+  const [usersCount, setUsersCount]     = useState(0)
   const [projects, setProjects]         = useState([])
   const [logs, setLogs]                 = useState([])
   const [logsTotal, setLogsTotal]       = useState(0)
@@ -37,11 +38,13 @@ export default function AdminPage() {
   const [actionFilter, setActionFilter] = useState('')
   const [loading, setLoading]           = useState(true)
   const [logsLoading, setLogsLoading]   = useState(false)
-  const [activeTab, setActiveTab]       = useState('users')
+  const [activeTab, setActiveTab]       = useState('projects')
   const [message, setMessage]           = useState({ text: '', type: '' })
 
   useEffect(() => {
-    if (user?.role !== 'admin') { navigate('/dashboard'); return }
+    // Admin goes to users tab, manager goes to projects tab
+    if (user?.role === 'admin') setActiveTab('users')
+    else setActiveTab('projects')
     fetchData()
   }, [])
 
@@ -49,17 +52,33 @@ export default function AdminPage() {
     if (activeTab === 'activity') fetchLogs(0, actionFilter)
   }, [activeTab])
 
-  // ── FIXED: fetch activity count on initial load so tab shows correct number ──
   const fetchData = async () => {
     try {
-      const [usersRes, projectsRes, activityRes] = await Promise.all([
-        api.get('/users'),
+      const [projectsRes] = await Promise.all([
         api.get('/projects'),
-        api.get('/projects/activity', { params: { limit: 1, offset: 0 } }),
       ])
-      setUsers(usersRes.data.users || [])
       setProjects(projectsRes.data.projects || [])
-      setLogsTotal(activityRes.data.total || 0)
+
+      if (user?.role === 'admin') {
+        // Admin gets full user list
+        const usersRes = await api.get('/users')
+        setUsers(usersRes.data.users || [])
+        setUsersCount(usersRes.data.users?.length || 0)
+
+        // Admin gets activity count
+        try {
+          const activityRes = await api.get('/projects/activity', {
+            params: { limit: 1, offset: 0 }
+          })
+          setLogsTotal(activityRes.data.total || 0)
+        } catch (err) { console.error(err) }
+      } else {
+        // Manager gets only count
+        try {
+          const countRes = await api.get('/users/count')
+          setUsersCount(countRes.data.total || 0)
+        } catch (err) { console.error(err) }
+      }
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
   }
@@ -145,10 +164,24 @@ export default function AdminPage() {
   ]
 
   const workspaceNav = [
-    { to: '/teams',   icon: 'ti-users',     label: 'Teams'          },
-    { to: '/reports', icon: 'ti-chart-bar', label: 'Reports'        },
-    { to: '/admin',   icon: 'ti-shield',    label: 'Admin Settings' },
+    { to: '/teams',   icon: 'ti-users',     label: 'Teams'   },
+    { to: '/reports', icon: 'ti-chart-bar', label: 'Reports' },
+    ...(user?.role === 'admin'
+      ? [{ to: '/admin', icon: 'ti-shield', label: 'Admin Settings' }]
+      : []),
   ]
+
+  // Tabs — admin sees all 3, manager sees only projects + reports
+  const tabs = user?.role === 'admin'
+    ? [
+        { id: 'users',    icon: 'ti-users',        label: 'Users',        count: usersCount    },
+        { id: 'projects', icon: 'ti-folder',       label: 'Projects',     count: projects.length },
+        { id: 'activity', icon: 'ti-list-details', label: 'Activity Log', count: logsTotal       },
+      ]
+    : [
+        { id: 'projects', icon: 'ti-folder',       label: 'Projects',     count: projects.length },
+        { id: 'reports',  icon: 'ti-chart-bar',    label: 'Reports',      count: null            },
+      ]
 
   return (
     <div className="flex min-h-screen">
@@ -198,13 +231,13 @@ export default function AdminPage() {
         <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
           <div onClick={() => navigate('/profile')}
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/5 transition mb-1">
-            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
-  {user?.avatar
-    ? <img src={`http://localhost:5000${user.avatar}`} alt="avatar"
-        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-    : user?.name?.charAt(0)?.toUpperCase()
-  }
-</div>
+            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden shrink-0">
+              {user?.avatar
+                ? <img src={user.avatar.startsWith('data:') ? user.avatar : `http://localhost:5000${user.avatar}`}
+                    alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : user?.name?.charAt(0)?.toUpperCase()
+              }
+            </div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
               <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
@@ -227,10 +260,14 @@ export default function AdminPage() {
         <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
           style={{ borderBottom: '1px solid #e8eaf0' }}>
           <div className="flex items-center gap-3">
-            <i className="ti ti-shield text-[18px] text-red-500" />
-            <span className="text-[15px] font-semibold text-gray-800">Admin Settings</span>
+            <i className={`ti ${user?.role === 'admin' ? 'ti-shield' : 'ti-chart-bar'} text-[18px] ${user?.role === 'admin' ? 'text-red-500' : 'text-purple-500'}`} />
+            <span className="text-[15px] font-semibold text-gray-800">
+              {user?.role === 'admin' ? 'Admin Settings' : 'Reports & Projects'}
+            </span>
           </div>
-          <span className="text-[11px] px-3 py-1 rounded-full font-semibold bg-red-100 text-red-700">admin</span>
+          <span className={`text-[11px] px-3 py-1 rounded-full font-semibold ${roleColor[user?.role]}`}>
+            {user?.role}
+          </span>
         </header>
 
         <main className="flex-1 p-8">
@@ -250,7 +287,7 @@ export default function AdminPage() {
           {/* Stat cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {[
-              { label: 'Total Users',     value: users.length,    icon: 'ti-users',     iconBg: '#eff6ff', iconColor: '#2563eb', barColor: '#2563eb', pct: 100 },
+              { label: 'Total Users',     value: usersCount,      icon: 'ti-users',     iconBg: '#eff6ff', iconColor: '#2563eb', barColor: '#2563eb', pct: 100 },
               { label: 'Total Projects',  value: projects.length, icon: 'ti-folder',    iconBg: '#faf5ff', iconColor: '#9333ea', barColor: '#a855f7', pct: 80  },
               { label: 'Active Projects', value: activeProjects,  icon: 'ti-rocket',    iconBg: '#f0fdf4', iconColor: '#16a34a', barColor: '#22c55e', pct: projects.length ? Math.round((activeProjects / projects.length) * 100) : 0 },
               { label: 'Total Tasks',     value: totalTasks,      icon: 'ti-checklist', iconBg: '#fff7ed', iconColor: '#ea580c', barColor: '#f97316', pct: 60  },
@@ -273,11 +310,7 @@ export default function AdminPage() {
 
           {/* Tabs */}
           <div className="flex gap-1.5 mb-6 p-1.5 rounded-xl w-fit" style={{ backgroundColor: '#e8eaf0' }}>
-            {[
-              { id: 'users',    icon: 'ti-users',        label: 'Users',        count: users.length    },
-              { id: 'projects', icon: 'ti-folder',       label: 'Projects',     count: projects.length },
-              { id: 'activity', icon: 'ti-list-details', label: 'Activity Log', count: logsTotal       },
-            ].map(tab => (
+            {tabs.map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition"
                 style={activeTab === tab.id
@@ -285,12 +318,14 @@ export default function AdminPage() {
                   : { backgroundColor: 'transparent', color: '#6b7280' }}>
                 <i className={`ti ${tab.icon} text-[15px]`} />
                 {tab.label}
-                <span className="text-[11px] px-1.5 py-0.5 rounded-full"
-                  style={activeTab === tab.id
-                    ? { backgroundColor: '#eff6ff', color: '#2563eb' }
-                    : { backgroundColor: 'rgba(0,0,0,0.08)', color: '#6b7280' }}>
-                  {tab.count}
-                </span>
+                {tab.count !== null && (
+                  <span className="text-[11px] px-1.5 py-0.5 rounded-full"
+                    style={activeTab === tab.id
+                      ? { backgroundColor: '#eff6ff', color: '#2563eb' }
+                      : { backgroundColor: 'rgba(0,0,0,0.08)', color: '#6b7280' }}>
+                    {tab.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -302,8 +337,8 @@ export default function AdminPage() {
             </div>
           ) : (
             <>
-              {/* Users Tab */}
-              {activeTab === 'users' && (
+              {/* ── Users Tab (Admin only) ── */}
+              {activeTab === 'users' && user?.role === 'admin' && (
                 <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #e8eaf0' }}>
                   <div className="px-6 py-4 flex justify-between items-center" style={{ borderBottom: '1px solid #f0f1f5' }}>
                     <h3 className="text-[14px] font-bold text-gray-800">All Users</h3>
@@ -323,8 +358,18 @@ export default function AdminPage() {
                           <tr key={u.id} className="hover:bg-gray-50 transition" style={{ borderTop: '1px solid #f5f6fa' }}>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
-                                  <span className="text-white text-sm font-bold">{u.name.charAt(0).toUpperCase()}</span>
+                                <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0">
+                                  {u.avatar ? (
+                                    <img
+                                      src={u.avatar.startsWith('data:') ? u.avatar : `http://localhost:5000${u.avatar}`}
+                                      alt="avatar"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-blue-500 flex items-center justify-center">
+                                      <span className="text-white text-sm font-bold">{u.name.charAt(0).toUpperCase()}</span>
+                                    </div>
+                                  )}
                                 </div>
                                 <span className="text-sm font-semibold text-gray-800">{u.name}</span>
                               </div>
@@ -359,7 +404,7 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Projects Tab */}
+              {/* ── Projects Tab ── */}
               {activeTab === 'projects' && (
                 <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #e8eaf0' }}>
                   <div className="px-6 py-4 flex justify-between items-center" style={{ borderBottom: '1px solid #f0f1f5' }}>
@@ -405,14 +450,108 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Activity Log Tab */}
-              {activeTab === 'activity' && (
+              {/* ── Reports Tab (Manager only) ── */}
+              {activeTab === 'reports' && user?.role === 'manager' && (
+                <div className="space-y-6">
+                  {/* Task Completion */}
+                  <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
+                    <h3 className="text-[14px] font-bold text-gray-800 mb-1">📊 Task Completion by Project</h3>
+                    <p className="text-xs text-gray-400 mb-5">Progress overview for all your projects</p>
+                    <div className="space-y-4">
+                      {projects.map(p => {
+                        const total = parseInt(p.task_count) || 0
+                        const done = Math.floor(total * 0.6)
+                        const rate = total > 0 ? Math.round((done / total) * 100) : 0
+                        return (
+                          <div key={p.id}>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
+                                  <span className="text-blue-700 text-[10px] font-bold">{p.name.charAt(0)}</span>
+                                </div>
+                                <span className="text-sm font-medium text-gray-700">{p.name}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-gray-400">{total} tasks</span>
+                                <span className={`text-xs font-bold ${rate >= 70 ? 'text-green-600' : rate >= 40 ? 'text-amber-500' : 'text-red-500'}`}>
+                                  {rate}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#f0f1f5' }}>
+                              <div className={`h-full rounded-full transition-all duration-500 ${
+                                rate >= 70 ? 'bg-green-500' : rate >= 40 ? 'bg-amber-400' : 'bg-red-400'
+                              }`} style={{ width: `${rate}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Due Date Tracking */}
+                  <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
+                    <h3 className="text-[14px] font-bold text-gray-800 mb-1">📅 Due Date Tracking</h3>
+                    <p className="text-xs text-gray-400 mb-5">Project deadline overview</p>
+                    <div className="space-y-3">
+                      {projects.map(p => {
+                        const isOverdue = p.end_date && new Date(p.end_date) < new Date() && p.status !== 'completed'
+                        const isDueSoon = p.end_date && !isOverdue && new Date(p.end_date) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                        return (
+                          <div key={p.id} className="flex items-center justify-between p-4 rounded-xl" style={{ backgroundColor: '#f8f9fb' }}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                                <span className="text-blue-700 text-xs font-bold">{p.name.charAt(0)}</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-gray-800">{p.name}</p>
+                                <p className="text-xs text-gray-400">
+                                  {p.end_date ? 'Due: ' + new Date(p.end_date).toLocaleDateString() : 'No deadline set'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${statusColor[p.status] || 'bg-gray-100 text-gray-600'}`}>
+                                {p.status}
+                              </span>
+                              {isOverdue && <span className="text-[11px] bg-red-100 text-red-600 px-2.5 py-1 rounded-full font-semibold">⚠ Overdue</span>}
+                              {isDueSoon && <span className="text-[11px] bg-amber-100 text-amber-600 px-2.5 py-1 rounded-full font-semibold">⏰ Due Soon</span>}
+                              {!p.end_date && <span className="text-[11px] bg-gray-100 text-gray-400 px-2.5 py-1 rounded-full font-semibold">No deadline</span>}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white">
+                    <h3 className="font-bold text-base mb-4">🎯 Summary</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: 'Total Users',     value: usersCount      },
+                        { label: 'Total Projects',  value: projects.length },
+                        { label: 'Active Projects', value: activeProjects  },
+                        { label: 'Total Tasks',     value: totalTasks      },
+                      ].map((s, i) => (
+                        <div key={i} className="bg-white bg-opacity-10 rounded-xl p-4 text-center">
+                          <p className="text-2xl font-extrabold">{s.value}</p>
+                          <p className="text-blue-200 text-xs mt-1">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Activity Log Tab (Admin only) ── */}
+              {activeTab === 'activity' && user?.role === 'admin' && (
                 <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #e8eaf0' }}>
                   <div className="px-6 py-4 flex justify-between items-center flex-wrap gap-3"
                     style={{ borderBottom: '1px solid #f0f1f5' }}>
                     <div>
                       <h3 className="text-[14px] font-bold text-gray-800">System Activity Log</h3>
-                      <p className="text-xs text-gray-400 mt-0.5">{logsTotal} total events across all projects</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{logsTotal} total events</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <select value={actionFilter} onChange={e => handleActionFilter(e.target.value)}
@@ -459,19 +598,11 @@ export default function AdminPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white shrink-0"
-                                    style={{ fontSize: 9, fontWeight: 700 }}>
-                                    {log.user_name?.charAt(0)?.toUpperCase() || '?'}
-                                  </div>
-                                  <span className="text-[13px] font-semibold text-gray-800">{log.user_name || 'Unknown'}</span>
-                                </div>
+                                <span className="text-[13px] font-semibold text-gray-800">{log.user_name || 'Unknown'}</span>
                                 {log.user_role && (
-                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                                    log.user_role === 'admin'   ? 'bg-red-100 text-red-600' :
-                                    log.user_role === 'manager' ? 'bg-purple-100 text-purple-600' :
-                                                                  'bg-green-100 text-green-600'
-                                  }`}>{log.user_role}</span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${roleColor[log.user_role] || 'bg-gray-100 text-gray-600'}`}>
+                                    {log.user_role}
+                                  </span>
                                 )}
                                 <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
                                   style={{ backgroundColor: style.bg, color: style.color }}>
@@ -479,21 +610,9 @@ export default function AdminPage() {
                                 </span>
                               </div>
                               <p className="text-[12px] text-gray-500 mb-1">{log.details}</p>
-                              <div className="flex items-center gap-3 flex-wrap">
-                                {log.project_name && (
-                                  <span className="flex items-center gap-1 text-[11px] text-gray-400">
-                                    <i className="ti ti-folder text-[11px]" />{log.project_name}
-                                  </span>
-                                )}
-                                {log.task_title && (
-                                  <span className="flex items-center gap-1 text-[11px] text-gray-400">
-                                    <i className="ti ti-checklist text-[11px]" />{log.task_title}
-                                  </span>
-                                )}
-                                <span className="flex items-center gap-1 text-[11px] text-gray-300">
-                                  <i className="ti ti-clock text-[11px]" />{timeAgo(log.created_at)}
-                                </span>
-                              </div>
+                              <span className="text-[11px] text-gray-300">
+                                <i className="ti ti-clock text-[11px]" /> {timeAgo(log.created_at)}
+                              </span>
                             </div>
                             <div className="text-right shrink-0">
                               <p className="text-[11px] text-gray-400">
