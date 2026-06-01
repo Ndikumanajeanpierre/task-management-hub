@@ -1,4 +1,3 @@
-// ReportsPage.jsx
 import { useState, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -22,11 +21,11 @@ export default function ReportsPage() {
   const location = useLocation()
 
   const [projects, setProjects] = useState([])
+  const [stats, setStats]       = useState([])
   const [users, setUsers]       = useState([])
   const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
-    // ✅ members blocked — only admin and manager allowed
     if (user?.role !== 'admin' && user?.role !== 'manager') {
       navigate('/dashboard')
       return
@@ -36,12 +35,15 @@ export default function ReportsPage() {
 
   const fetchData = async () => {
     try {
-      const [projRes, usersRes] = await Promise.all([
+      const [projRes, statsRes, usersRes] = await Promise.all([
         api.get('/projects'),
-        // ✅ only admin can fetch all users; manager gets empty array
-        user?.role === 'admin' ? api.get('/users') : Promise.resolve({ data: { users: [] } }),
+        api.get('/projects/stats'),
+        user?.role === 'admin'
+          ? api.get('/users')
+          : Promise.resolve({ data: { users: [] } }),
       ])
       setProjects(projRes.data.projects || [])
+      setStats(statsRes.data.stats || [])
       setUsers(usersRes.data.users || [])
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
@@ -59,7 +61,6 @@ export default function ReportsPage() {
     'from-orange-500 to-orange-600',
   ]
 
-  // ── Shared sidebar nav ──
   const mainNav = [
     { to: '/dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard', count: projects.length },
     { to: '/projects',  icon: 'ti-folder',            label: 'Projects',  count: projects.length },
@@ -69,53 +70,36 @@ export default function ReportsPage() {
 
   const workspaceNav = [
     { to: '/teams',   icon: 'ti-users',     label: 'Teams' },
-    // ✅ Reports — admin and manager only
-    ...(user?.role === 'admin' || user?.role === 'manager' ? [
-      { to: '/reports', icon: 'ti-chart-bar', label: 'Reports' },
-    ] : []),
-    // ✅ Admin Settings and Settings — admin only
-    ...(user?.role === 'admin' ? [
-      { to: '/admin',    icon: 'ti-shield',   label: 'Admin Settings' },
-      { to: '/settings', icon: 'ti-settings', label: 'Settings' },
-    ] : []),
+    ...(user?.role === 'admin' || user?.role === 'manager'
+      ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }] : []),
+    ...(user?.role === 'admin'
+      ? [{ to: '/admin', icon: 'ti-shield', label: 'Admin Settings' }] : []),
   ]
 
   return (
     <div className="flex min-h-screen">
 
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <aside className="w-[240px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
         style={{ backgroundColor: '#1a2235' }}>
-
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5"
-          style={{ borderBottom: '1px solid #253047' }}>
+        <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: '1px solid #253047' }}>
           <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
           <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
 
-        {/* Nav */}
         <div className="flex-1 px-3 py-4 overflow-y-auto">
-          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest"
-            style={{ color: '#6b7a99' }}>Main</p>
-
+          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
           {mainNav.map(item => {
             const active = location.pathname === item.to
             return (
               <Link key={item.to} to={item.to}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
-                style={{
-                  backgroundColor: active ? '#2d3f5e' : 'transparent',
-                  color: active ? '#ffffff' : '#8b9ab8',
-                }}>
+                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
                 <i className={`ti ${item.icon} text-[16px]`} />
                 <span className="flex-1">{item.label}</span>
                 {item.count !== undefined && (
                   <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                    style={{
-                      backgroundColor: active ? '#3d5280' : '#253047',
-                      color: active ? '#93c5fd' : '#6b7a99',
-                    }}>
+                    style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
                     {item.count}
                   </span>
                 )}
@@ -123,18 +107,13 @@ export default function ReportsPage() {
             )
           })}
 
-          <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest"
-            style={{ color: '#6b7a99' }}>Workspace</p>
-
+          <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
           {workspaceNav.map(item => {
             const active = location.pathname === item.to
             return (
               <Link key={item.to} to={item.to}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
-                style={{
-                  backgroundColor: active ? '#2d3f5e' : 'transparent',
-                  color: active ? '#ffffff' : '#8b9ab8',
-                }}>
+                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
                 <i className={`ti ${item.icon} text-[16px]`} />
                 {item.label}
               </Link>
@@ -142,50 +121,33 @@ export default function ReportsPage() {
           })}
         </div>
 
-        {/* ── User + Logout ── */}
-        <div className="px-3 pb-4 pt-2 shrink-0"
-          style={{ borderTop: '1px solid #253047' }}>
-          <div
-            onClick={() => navigate('/profile')}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/5 transition mb-1"
-          >
-           <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
-  {user?.avatar
-    ? <img src={`http://localhost:5000${user.avatar}`} alt="avatar"
-        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-    : user?.name?.charAt(0)?.toUpperCase()
-  }
-</div>
+        <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
+          <div onClick={() => navigate('/profile')}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/5 transition mb-1">
+            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+              {user?.avatar
+                ? <img src={`http://localhost:5000${user.avatar}`} alt="avatar"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : user?.name?.charAt(0)?.toUpperCase() || 'U'
+              }
+            </div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
               <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
             </div>
           </div>
-
-          {/* Logout — always visible for ALL roles */}
-          <button
-            onClick={handleLogout}
+          <button onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition"
             style={{ color: '#8b9ab8' }}
-            onMouseEnter={e => {
-              e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.15)'
-              e.currentTarget.style.color = '#f87171'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.backgroundColor = 'transparent'
-              e.currentTarget.style.color = '#8b9ab8'
-            }}
-          >
-            <i className="ti ti-logout text-[16px]" />
-            Logout
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.15)'; e.currentTarget.style.color = '#f87171' }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#8b9ab8' }}>
+            <i className="ti ti-logout text-[16px]" /> Logout
           </button>
         </div>
       </aside>
 
-      {/* ── Main ── */}
-      <div className="flex-1 flex flex-col min-w-0 ml-[240px]"
-        style={{ backgroundColor: '#f3f4f8' }}>
-
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0 ml-[240px]" style={{ backgroundColor: '#f3f4f8' }}>
         <header className="h-14 bg-white flex items-center px-7 sticky top-0 z-30"
           style={{ borderBottom: '1px solid #e8eaf0' }}>
           <span className="text-[15px] font-semibold text-gray-800">Reports</span>
@@ -199,77 +161,69 @@ export default function ReportsPage() {
             </div>
           ) : (
             <>
-              {/* Task Completion Report */}
+              {/* ── Task Completion Report — REAL DATA from /projects/stats ── */}
               <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
                 <h3 className="text-[15px] font-bold text-gray-800 mb-1">
                   <i className="ti ti-chart-bar mr-2 text-blue-500" />
                   Task Completion Report
                 </h3>
                 <p className="text-xs text-gray-400 mb-5">
-                  Total tasks, completed, overdue and completion rate per project
+                  Real data — total tasks, completed, overdue and completion rate per project
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr style={{ backgroundColor: '#f8f9fb' }}>
                         {['Project', 'Total Tasks', 'Completed', 'Overdue', 'Completion Rate', 'Progress'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                            {h}
-                          </th>
+                          <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {projects.map(p => {
-                        const total     = parseInt(p.task_count) || 0
-                        const completed = Math.floor(total * 0.6)
-                        const overdue   = Math.floor(total * 0.1)
-                        const rate      = total > 0 ? Math.round((completed / total) * 100) : 0
-                        return (
-                          <tr key={p.id} className="hover:bg-gray-50 transition"
-                            style={{ borderTop: '1px solid #f5f6fa' }}>
-                            <td className="px-4 py-4">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                                  <span className="text-blue-700 text-xs font-bold">
-                                    {p.name.charAt(0).toUpperCase()}
-                                  </span>
-                                </div>
-                                <span className="text-sm font-semibold text-gray-800">{p.name}</span>
+                      {stats.map(p => (
+                        <tr key={p.id} className="hover:bg-gray-50 transition"
+                          style={{ borderTop: '1px solid #f5f6fa' }}>
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                                <span className="text-blue-700 text-xs font-bold">{p.name.charAt(0).toUpperCase()}</span>
                               </div>
-                            </td>
-                            <td className="px-4 py-4">
-                              <span className="text-sm font-bold text-gray-700">{total}</span>
-                            </td>
-                            <td className="px-4 py-4">
-                              <span className="text-sm font-bold text-green-600">{completed}</span>
-                            </td>
-                            <td className="px-4 py-4">
-                              <span className="text-sm font-bold text-red-500">{overdue}</span>
-                            </td>
-                            <td className="px-4 py-4">
-                              <span className={`text-sm font-bold ${
-                                rate >= 70 ? 'text-green-600' :
-                                rate >= 40 ? 'text-amber-500' : 'text-red-500'
-                              }`}>{rate}%</span>
-                            </td>
-                            <td className="px-4 py-4 w-36">
-                              <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#f0f1f5' }}>
-                                <div className={`h-full rounded-full transition-all ${
-                                  rate >= 70 ? 'bg-green-500' :
-                                  rate >= 40 ? 'bg-amber-400' : 'bg-red-400'
-                                }`} style={{ width: `${rate}%` }} />
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
+                              <span className="text-sm font-semibold text-gray-800">{p.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="text-sm font-bold text-gray-700">{p.total_tasks}</span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="text-sm font-bold text-green-600">{p.completed_tasks}</span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`text-sm font-bold ${p.overdue_tasks > 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                              {p.overdue_tasks}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`text-sm font-bold ${
+                              p.completion_rate >= 70 ? 'text-green-600' :
+                              p.completion_rate >= 40 ? 'text-amber-500' : 'text-red-500'
+                            }`}>{p.completion_rate}%</span>
+                          </td>
+                          <td className="px-4 py-4 w-36">
+                            <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#f0f1f5' }}>
+                              <div className={`h-full rounded-full transition-all ${
+                                p.completion_rate >= 70 ? 'bg-green-500' :
+                                p.completion_rate >= 40 ? 'bg-amber-400' : 'bg-red-400'
+                              }`} style={{ width: `${p.completion_rate}%` }} />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              {/* Team Productivity — admin only (needs all users) */}
+              {/* Team Productivity — admin only */}
               {user?.role === 'admin' && users.length > 0 && (
                 <div className="bg-white rounded-2xl p-6" style={{ border: '1px solid #e8eaf0' }}>
                   <h3 className="text-[15px] font-bold text-gray-800 mb-1">
@@ -283,26 +237,24 @@ export default function ReportsPage() {
                       return (
                         <div key={u.id} className="flex items-center gap-4 p-4 rounded-xl"
                           style={{ backgroundColor: '#f8f9fb' }}>
-                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradientColors[i % gradientColors.length]} flex items-center justify-center shrink-0`}>
-                            <span className="text-white font-bold text-sm">
-                              {u.name.charAt(0).toUpperCase()}
-                            </span>
+                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradientColors[i % gradientColors.length]} flex items-center justify-center shrink-0 overflow-hidden`}>
+                            {u.avatar
+                              ? <img src={`http://localhost:5000${u.avatar}`} alt="avatar"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              : <span className="text-white font-bold text-sm">{u.name.charAt(0).toUpperCase()}</span>
+                            }
                           </div>
                           <div className="flex-1">
                             <div className="flex justify-between items-center mb-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-semibold text-gray-800">{u.name}</span>
-                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${roleColor[u.role]}`}>
-                                  {u.role}
-                                </span>
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${roleColor[u.role]}`}>{u.role}</span>
                               </div>
                               <span className="text-sm font-bold text-gray-600">{tasksDone} tasks done</span>
                             </div>
                             <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#e5e7eb' }}>
-                              <div
-                                className={`h-full bg-gradient-to-r ${gradientColors[i % gradientColors.length]} rounded-full transition-all`}
-                                style={{ width: `${Math.min(tasksDone * 10, 100)}%` }}
-                              />
+                              <div className={`h-full bg-gradient-to-r ${gradientColors[i % gradientColors.length]} rounded-full transition-all`}
+                                style={{ width: `${Math.min(tasksDone * 10, 100)}%` }} />
                             </div>
                           </div>
                         </div>
@@ -323,24 +275,15 @@ export default function ReportsPage() {
                     {['admin', 'manager', 'member'].map(role => {
                       const count = users.filter(u => u.role === role).length
                       const pct   = users.length ? Math.round((count / users.length) * 100) : 0
-                      const colors = {
-                        admin:   'bg-red-500',
-                        manager: 'bg-purple-500',
-                        member:  'bg-emerald-500',
-                      }
+                      const colors = { admin: 'bg-red-500', manager: 'bg-purple-500', member: 'bg-emerald-500' }
                       return (
                         <div key={role}>
                           <div className="flex justify-between items-center mb-2">
-                            <span className={`text-[11px] font-semibold px-3 py-1 rounded-full ${roleColor[role]}`}>
-                              {role}
-                            </span>
-                            <span className="text-sm font-bold text-gray-500">
-                              {count} users ({pct}%)
-                            </span>
+                            <span className={`text-[11px] font-semibold px-3 py-1 rounded-full ${roleColor[role]}`}>{role}</span>
+                            <span className="text-sm font-bold text-gray-500">{count} users ({pct}%)</span>
                           </div>
                           <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#f0f1f5' }}>
-                            <div className={`h-full rounded-full transition-all ${colors[role]}`}
-                              style={{ width: `${pct}%` }} />
+                            <div className={`h-full rounded-full transition-all ${colors[role]}`} style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                       )
@@ -366,16 +309,12 @@ export default function ReportsPage() {
                         style={{ backgroundColor: '#f8f9fb' }}>
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-                            <span className="text-blue-700 text-xs font-bold">
-                              {p.name.charAt(0).toUpperCase()}
-                            </span>
+                            <span className="text-blue-700 text-xs font-bold">{p.name.charAt(0).toUpperCase()}</span>
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-gray-800">{p.name}</p>
                             <p className="text-xs text-gray-400">
-                              {p.end_date
-                                ? 'Due: ' + new Date(p.end_date).toLocaleDateString()
-                                : 'No deadline set'}
+                              {p.end_date ? 'Due: ' + new Date(p.end_date).toLocaleDateString() : 'No deadline set'}
                             </p>
                           </div>
                         </div>
@@ -384,19 +323,13 @@ export default function ReportsPage() {
                             {p.status?.replace('_', ' ')}
                           </span>
                           {isOverdue && p.status !== 'completed' && (
-                            <span className="text-[11px] bg-red-100 text-red-600 px-2.5 py-1 rounded-full font-semibold">
-                              ⚠ Overdue
-                            </span>
+                            <span className="text-[11px] bg-red-100 text-red-600 px-2.5 py-1 rounded-full font-semibold">⚠ Overdue</span>
                           )}
                           {isDueSoon && (
-                            <span className="text-[11px] bg-amber-100 text-amber-600 px-2.5 py-1 rounded-full font-semibold">
-                              ⏰ Due Soon
-                            </span>
+                            <span className="text-[11px] bg-amber-100 text-amber-600 px-2.5 py-1 rounded-full font-semibold">⏰ Due Soon</span>
                           )}
                           {!p.end_date && (
-                            <span className="text-[11px] bg-gray-100 text-gray-400 px-2.5 py-1 rounded-full font-semibold">
-                              No deadline
-                            </span>
+                            <span className="text-[11px] bg-gray-100 text-gray-400 px-2.5 py-1 rounded-full font-semibold">No deadline</span>
                           )}
                         </div>
                       </div>
@@ -415,9 +348,9 @@ export default function ReportsPage() {
                 <p className="text-blue-200 text-xs mb-5">Complete overview of the system</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: 'Total Users',     value: users.length,    icon: 'ti-users' },
-                    { label: 'Total Projects',  value: projects.length, icon: 'ti-folder' },
-                    { label: 'Active Projects', value: activeProjects,  icon: 'ti-rocket' },
+                    { label: 'Total Users',     value: users.length,    icon: 'ti-users'     },
+                    { label: 'Total Projects',  value: projects.length, icon: 'ti-folder'    },
+                    { label: 'Active Projects', value: activeProjects,  icon: 'ti-rocket'    },
                     { label: 'Total Tasks',     value: totalTasks,      icon: 'ti-checklist' },
                   ].map((s, i) => (
                     <div key={i} className="rounded-xl p-4 text-center"

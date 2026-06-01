@@ -272,8 +272,6 @@ const getAllActivity = async (req, res) => {
 // GET real project stats for reports
 const getProjectStats = async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-
     const [projects] = await db.query(`
       SELECT
         p.id,
@@ -282,29 +280,31 @@ const getProjectStats = async (req, res) => {
         p.end_date,
         COUNT(t.id) AS total_tasks,
         SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS completed_tasks,
-        SUM(CASE WHEN t.due_date < ? AND t.status != 'done' THEN 1 ELSE 0 END) AS overdue_tasks
+        SUM(CASE WHEN t.due_date IS NOT NULL
+                  AND DATE(t.due_date) < CURDATE()
+                  AND t.status != 'done' THEN 1 ELSE 0 END) AS overdue_tasks
       FROM projects p
       LEFT JOIN tasks t ON p.id = t.project_id
       GROUP BY p.id
       ORDER BY p.created_at DESC
-    `, [today]);
+    `)
 
     const stats = projects.map(p => ({
       ...p,
       total_tasks:     parseInt(p.total_tasks)     || 0,
       completed_tasks: parseInt(p.completed_tasks) || 0,
       overdue_tasks:   parseInt(p.overdue_tasks)   || 0,
-      completion_rate: p.total_tasks > 0
+      completion_rate: parseInt(p.total_tasks) > 0
         ? Math.round((parseInt(p.completed_tasks) / parseInt(p.total_tasks)) * 100)
         : 0,
-    }));
+    }))
 
-    return res.status(200).json({ success: true, stats });
+    return res.status(200).json({ success: true, stats })
   } catch (error) {
-    console.error('GetProjectStats error:', error.message);
-    return res.status(500).json({ success: false, message: 'Server error.' });
+    console.error('GetProjectStats error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
   }
-};
+}
 
 module.exports = {
   createProject,
