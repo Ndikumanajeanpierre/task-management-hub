@@ -9,18 +9,30 @@ export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null)
 
   useEffect(() => {
-    if (!token) return
+    if (!token) {
+      setSocket(null)
+      return
+    }
 
     const newSocket = io('http://localhost:5000', {
-      transports: ['websocket'],
+      auth: { token },                          // ← sends JWT to backend
+      transports: ['websocket', 'polling'],     // ← fallback to polling if websocket fails
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
     })
 
     newSocket.on('connect', () => {
       console.log('⚡ Socket connected:', newSocket.id)
+      setSocket(newSocket)                      // ← set AFTER confirmed connected
     })
 
-    newSocket.on('disconnect', () => {
-      console.log('❌ Socket disconnected')
+    newSocket.on('disconnect', (reason) => {
+      console.log('❌ Socket disconnected:', reason)
+    })
+
+    newSocket.on('connect_error', (err) => {
+      console.error('🔴 Socket error:', err.message)
     })
 
     setSocket(newSocket)

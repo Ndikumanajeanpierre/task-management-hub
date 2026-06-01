@@ -225,14 +225,14 @@ export default function BoardPage() {
               </button>
 
               {/* Project Status */}
-              <span className={`text-xs px-3 py-1.5 rounded-full font-semibold ${
-                project?.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                project?.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                'bg-amber-100 text-amber-700'
-              }`}>
-                {project?.status}
-              </span>
-
+             <span className={`text-xs px-3 py-1.5 rounded-full font-semibold ${
+  project?.status === 'active'    ? 'bg-emerald-100 text-emerald-700' :
+  project?.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+  project?.status === 'on_hold'   ? 'bg-amber-100 text-amber-700' :
+  'bg-gray-100 text-gray-600'
+}`}>
+  {project?.status?.replace('_', ' ')}
+</span>
               {/* Edit Project Button */}
               {(user?.role === 'admin' || user?.role === 'manager') && (
                 <button
