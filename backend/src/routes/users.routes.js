@@ -4,7 +4,7 @@ const path = require('path')
 const multer = require('multer')
 const {
   getAllUsers, getUserById, updateUserRole,
-  deleteUser, changePassword, updateProfile, uploadAvatar
+  deleteUser, changePassword, updateProfile, uploadAvatar, getUsersCount
 } = require('../controllers/users.controller')
 const { auth, requireRole } = require('../middleware/auth')
 
@@ -30,6 +30,9 @@ const upload = multer({
   fileFilter,
   limits: { fileSize: 2 * 1024 * 1024 }
 })
+
+// ── IMPORTANT: /count must be before /:id or Express will treat "count" as an id
+router.get('/count',          auth, requireRole('admin', 'manager'), getUsersCount)
 
 router.get('/',               auth, requireRole('admin'), getAllUsers)
 router.get('/:id',            auth, getUserById)

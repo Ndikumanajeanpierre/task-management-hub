@@ -158,7 +158,19 @@ const uploadAvatar = async (req, res) => {
   }
 };
 
+// ─── GET USERS COUNT — admin and manager ─────
+const getUsersCount = async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT COUNT(*) as count FROM users')
+    return res.status(200).json({ success: true, count: rows[0].count })
+  } catch (error) {
+    console.error('GetUsersCount error:', error.message)
+    return res.status(500).json({ success: false, message: 'Server error.' })
+  }
+}
+
 module.exports = {
   getAllUsers, getUserById, updateUserRole,
-  deleteUser, changePassword, updateProfile, uploadAvatar
+  deleteUser, changePassword, updateProfile, uploadAvatar,
+  getUsersCount,
 };
