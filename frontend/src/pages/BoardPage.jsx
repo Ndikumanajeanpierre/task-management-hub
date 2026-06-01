@@ -16,36 +16,40 @@ export default function BoardPage() {
   const { user } = useAuth()
   const { socket } = useSocket()
 
-  const [project, setProject]             = useState(null)
-  const [tasks, setTasks]                 = useState([])
-  const [activityLogs, setActivityLogs]   = useState([])
-  const [loading, setLoading]             = useState(true)
-  const [selectedTask, setSelectedTask]   = useState(null)
-  const [createModal, setCreateModal]     = useState(null)
+  const [project, setProject]               = useState(null)
+  const [tasks, setTasks]                   = useState([])
+  const [activityLogs, setActivityLogs]     = useState([])
+  const [loading, setLoading]               = useState(true)
+  const [selectedTask, setSelectedTask]     = useState(null)
+  const [createModal, setCreateModal]       = useState(null)
   const [editingProject, setEditingProject] = useState(false)
-  const [projectForm, setProjectForm]     = useState({})
-  const [filter, setFilter]               = useState({
+  const [projectForm, setProjectForm]       = useState({})
+  const [allTeams, setAllTeams]             = useState([])   // ← new
+  const [filter, setFilter]                 = useState({
     priority: '', search: '', assigned_to: '', due_date_from: '', due_date_to: ''
   })
-  const [members, setMembers]             = useState([])
-  const [showFilters, setShowFilters]     = useState(false)
-  const [showActivity, setShowActivity]   = useState(false)
-  const [liveAlert, setLiveAlert]         = useState(null)
-  const alertTimeout                      = useRef(null)
+  const [members, setMembers]               = useState([])
+  const [showFilters, setShowFilters]       = useState(false)
+  const [showActivity, setShowActivity]     = useState(false)
+  const [liveAlert, setLiveAlert]           = useState(null)
+  const alertTimeout                        = useRef(null)
 
   useEffect(() => { fetchData() }, [id])
 
   // ── Fetch all data ──────────────────────────────────────
   const fetchData = async () => {
     try {
-      const [projRes, tasksRes, logsRes] = await Promise.all([
+      const [projRes, tasksRes, logsRes, teamsRes] = await Promise.all([
         api.get(`/projects/${id}`),
         api.get(`/tasks/project/${id}`),
-        api.get(`/projects/${id}/activity`)
+        api.get(`/projects/${id}/activity`),
+        api.get('/teams'),                          // ← fetch all teams
       ])
       setProject(projRes.data.project)
       setTasks(tasksRes.data.tasks)
       setActivityLogs(logsRes.data.logs)
+      setAllTeams(teamsRes.data.teams || [])        // ← set all teams
+
       if (projRes.data.project?.team_id) {
         try {
           const teamRes = await api.get(`/teams/${projRes.data.project.team_id}`)
@@ -225,23 +229,25 @@ export default function BoardPage() {
               </button>
 
               {/* Project Status */}
-             <span className={`text-xs px-3 py-1.5 rounded-full font-semibold ${
-  project?.status === 'active'    ? 'bg-emerald-100 text-emerald-700' :
-  project?.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-  project?.status === 'on_hold'   ? 'bg-amber-100 text-amber-700' :
-  'bg-gray-100 text-gray-600'
-}`}>
-  {project?.status?.replace('_', ' ')}
-</span>
+              <span className={`text-xs px-3 py-1.5 rounded-full font-semibold ${
+                project?.status === 'active'    ? 'bg-emerald-100 text-emerald-700' :
+                project?.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                project?.status === 'on_hold'   ? 'bg-amber-100 text-amber-700' :
+                'bg-gray-100 text-gray-600'
+              }`}>
+                {project?.status?.replace('_', ' ')}
+              </span>
+
               {/* Edit Project Button */}
               {(user?.role === 'admin' || user?.role === 'manager') && (
                 <button
                   onClick={() => {
                     setProjectForm({
-                      name: project?.name || '',
+                      name:        project?.name || '',
                       description: project?.description || '',
-                      status: project?.status || 'active',
-                      end_date: project?.end_date ? project.end_date.split('T')[0] : '',
+                      status:      project?.status || 'active',
+                      end_date:    project?.end_date ? project.end_date.split('T')[0] : '',
+                      team_id:     project?.team_id || '',   // ← pre-select current team
                     })
                     setEditingProject(true)
                   }}
@@ -428,6 +434,22 @@ export default function BoardPage() {
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 resize-none"
                 />
               </div>
+
+              {/* Team selector */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Team</label>
+                <select
+                  value={projectForm.team_id || ''}
+                  onChange={e => setProjectForm({...projectForm, team_id: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">No team</option>
+                  {allTeams.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Status</label>
