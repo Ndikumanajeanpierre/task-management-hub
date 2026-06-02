@@ -13,8 +13,7 @@ const BellIcon = () => (
 
 const HamburgerIcon = ({ open }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-    style={{ transition: 'transform 0.2s ease' }}>
+    stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     {open ? (
       <>
         <line x1="18" y1="6" x2="6" y2="18" />
@@ -32,7 +31,7 @@ const HamburgerIcon = ({ open }) => (
 
 const getAvatarUrl = (avatar) => {
   if (!avatar) return null
-  if (avatar.startsWith('http')) return avatar
+  if (avatar.startsWith('data:') || avatar.startsWith('http')) return avatar
   return `http://localhost:5000${avatar}`
 }
 
@@ -71,6 +70,7 @@ export default function DashboardPage() {
   const [showSearch, setShowSearch]       = useState(false)
   const [searchQuery, setSearchQuery]     = useState('')
   const searchInputRef = useRef(null)
+  const notifRef = useRef(null)
 
   useEffect(() => { fetchProjects(); fetchNotifications() }, [])
 
@@ -79,7 +79,6 @@ export default function DashboardPage() {
     else setSearchQuery('')
   }, [showSearch])
 
-  // Close sidebar on resize to desktop
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) setShowSidebar(false)
@@ -88,34 +87,31 @@ export default function DashboardPage() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Lock body scroll when mobile sidebar is open
   useEffect(() => {
-    if (showSidebar) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    document.body.style.overflow = showSidebar ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [showSidebar])
 
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape') {
-        setShowSearch(false)
-        setShowSidebar(false)
-        setShowNotif(false)
-        setShowUserMenu(false)
+        setShowSearch(false); setShowSidebar(false)
+        setShowNotif(false); setShowUserMenu(false)
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setShowSearch(true) }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault(); setShowSearch(true)
+      }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
-  // Close dropdowns when clicking outside
+  // Close notification when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (showNotif && !e.target.closest('[data-notif]')) setShowNotif(false)
+      if (showNotif && notifRef.current && !notifRef.current.contains(e.target)) {
+        setShowNotif(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -133,6 +129,13 @@ export default function DashboardPage() {
     try {
       const res = await api.get('/tasks/notifications')
       setNotifications(res.data.notifications || [])
+    } catch (err) { console.error(err) }
+  }
+
+  const markAllRead = async () => {
+    try {
+      await api.patch('/tasks/notifications/read')
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     } catch (err) { console.error(err) }
   }
 
@@ -173,39 +176,37 @@ export default function DashboardPage() {
     ...(user?.role === 'admin' ? [
       { to: '/admin',    icon: 'ti-shield',   label: 'Admin Settings' },
       { to: '/settings', icon: 'ti-settings', label: 'Settings' },
-    ] : []),
+    ] : [
+      { to: '/settings', icon: 'ti-settings', label: 'Settings' },
+    ]),
   ]
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full" style={{ backgroundColor: '#1a2235' }}>
-      {/* Logo row — hamburger visible only on mobile inside sidebar header */}
-      <div className="flex items-center justify-between px-5 py-5" style={{ borderBottom: '1px solid #253047' }}>
+      <div className="flex items-center justify-between px-5 py-5"
+        style={{ borderBottom: '1px solid #253047' }}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
           <span className="text-[16px] font-semibold text-white">Task Hub</span>
         </div>
-        {/* Close button — mobile only */}
-        <button
-          onClick={() => setShowSidebar(false)}
-          className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition"
-          aria-label="Close sidebar"
-        >
+        <button onClick={() => setShowSidebar(false)}
+          className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
       </div>
 
       <div className="flex-1 px-3 py-4 overflow-y-auto">
-        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
+        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest"
+          style={{ color: '#6b7a99' }}>Main</p>
         {mainNav.map(item => {
           const active = location.pathname === item.to
           return (
             <Link key={item.to} to={item.to}
               onClick={() => setShowSidebar(false)}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
-              style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
+              style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#fff' : '#8b9ab8' }}>
               <i className={`ti ${item.icon} text-[16px]`} />
               <span className="flex-1">{item.label}</span>
               {item.count !== undefined && (
@@ -218,14 +219,15 @@ export default function DashboardPage() {
           )
         })}
 
-        <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
+        <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest"
+          style={{ color: '#6b7a99' }}>Workspace</p>
         {workspaceNav.map(item => {
           const active = location.pathname === item.to
           return (
             <Link key={item.to} to={item.to}
               onClick={() => setShowSidebar(false)}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
-              style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
+              style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#fff' : '#8b9ab8' }}>
               <i className={`ti ${item.icon} text-[16px]`} />
               {item.label}
             </Link>
@@ -233,6 +235,7 @@ export default function DashboardPage() {
         })}
       </div>
 
+      {/* User at bottom */}
       <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
         <div className="relative">
           <button onClick={() => setShowUserMenu(!showUserMenu)}
@@ -252,9 +255,9 @@ export default function DashboardPage() {
                 style={{ background: 'linear-gradient(to right, #eff6ff, #eef2ff)' }}>
                 <div className="flex items-center gap-3">
                   <Avatar user={user} size={10} />
-                  <div>
-                    <p className="text-sm font-bold text-gray-800">{user?.name}</p>
-                    <p className="text-xs text-gray-400">{user?.email}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-800 truncate">{user?.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{user?.email}</p>
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold mt-1 inline-block ${
                       user?.role === 'admin'   ? 'bg-red-100 text-red-600' :
                       user?.role === 'manager' ? 'bg-purple-100 text-purple-600' :
@@ -264,14 +267,16 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="py-1">
-                <button onClick={() => { setShowUserMenu(false); setShowSidebar(false); navigate('/profile') }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
-                  <i className="ti ti-user text-base text-gray-400" /> View Profile
-                </button>
-                <button onClick={() => { setShowUserMenu(false); navigate('/profile?tab=password') }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
-                  <i className="ti ti-lock text-base text-gray-400" /> Change Password
-                </button>
+                {[
+                  { icon: 'ti-user',     label: 'View Profile',     action: () => { setShowUserMenu(false); setShowSidebar(false); navigate('/profile') } },
+                  { icon: 'ti-settings', label: 'Settings',          action: () => { setShowUserMenu(false); navigate('/settings') } },
+                  { icon: 'ti-lock',     label: 'Change Password',   action: () => { setShowUserMenu(false); navigate('/settings?tab=password') } },
+                ].map((item, i) => (
+                  <button key={i} onClick={item.action}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
+                    <i className={`ti ${item.icon} text-base text-gray-400`} /> {item.label}
+                  </button>
+                ))}
                 {user?.role === 'admin' && (
                   <button onClick={() => { setShowUserMenu(false); setShowSidebar(false); navigate('/admin') }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition text-left">
@@ -314,10 +319,8 @@ export default function DashboardPage() {
                   <i className="ti ti-x text-sm" />
                 </button>
               )}
-              <kbd className="hidden sm:inline text-[11px] px-2 py-0.5 rounded-lg font-medium text-gray-400"
-                style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>Esc</kbd>
             </div>
-            <div className="max-h-[60vh] sm:max-h-80 overflow-y-auto">
+            <div className="max-h-[60vh] overflow-y-auto">
               {searchQuery.trim() === '' ? (
                 <div className="px-4 py-3">
                   <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Recent Projects</p>
@@ -333,7 +336,7 @@ export default function DashboardPage() {
                         <p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p>
                         <p className="text-[11px] text-gray-400">{p.team_name || 'No team'}</p>
                       </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusStyle[p.status] || 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${statusStyle[p.status] || 'bg-gray-100 text-gray-500'}`}>
                         {p.status?.replace('_', ' ')}
                       </span>
                     </button>
@@ -342,7 +345,7 @@ export default function DashboardPage() {
               ) : searchResults.length === 0 ? (
                 <div className="text-center py-10">
                   <i className="ti ti-search-off text-3xl text-gray-200 block mb-2" />
-                  <p className="text-[13px] text-gray-400">No projects found for <span className="font-semibold">"{searchQuery}"</span></p>
+                  <p className="text-[13px] text-gray-400">No projects found for <strong>"{searchQuery}"</strong></p>
                 </div>
               ) : (
                 <div className="px-4 py-3">
@@ -359,9 +362,9 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p>
-                        <p className="text-[11px] text-gray-400 truncate">{p.description || 'No description'} · {p.team_name || 'No team'}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{p.description || 'No description'}</p>
                       </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusStyle[p.status] || 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${statusStyle[p.status] || 'bg-gray-100 text-gray-500'}`}>
                         {p.status?.replace('_', ' ')}
                       </span>
                     </button>
@@ -369,37 +372,18 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            <div className="px-4 py-2.5 flex items-center gap-4" style={{ borderTop: '1px solid #f0f1f5', backgroundColor: '#fafafa' }}>
-              <span className="text-[11px] text-gray-400 flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>↵</kbd> to open
-              </span>
-              <span className="text-[11px] text-gray-400 flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>Esc</kbd> to close
-              </span>
-              <span className="hidden sm:flex text-[11px] text-gray-400 items-center gap-1.5 ml-auto">
-                <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ backgroundColor: '#f0f1f5', border: '1px solid #e8eaf0' }}>⌘K</kbd> anywhere
-              </span>
-            </div>
           </div>
         </div>
       )}
 
       {/* ── Mobile Sidebar Overlay ── */}
       {showSidebar && (
-        <div
-          className="fixed inset-0 z-40 lg:hidden"
+        <div className="fixed inset-0 z-40 lg:hidden"
           style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(1px)' }}
-          onClick={() => setShowSidebar(false)}
-          aria-label="Close sidebar overlay"
-        >
-          {/* Slide-in drawer */}
-          <div
-            className="absolute top-0 left-0 h-full w-[260px] sm:w-[280px] shadow-2xl"
-            style={{
-              animation: 'slideInLeft 0.22s cubic-bezier(0.4,0,0.2,1)',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
+          onClick={() => setShowSidebar(false)}>
+          <div className="absolute top-0 left-0 h-full w-[260px] sm:w-[280px] shadow-2xl"
+            style={{ animation: 'slideInLeft 0.22s cubic-bezier(0.4,0,0.2,1)' }}
+            onClick={e => e.stopPropagation()}>
             <SidebarContent />
           </div>
         </div>
@@ -414,117 +398,157 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col min-w-0 lg:ml-[240px]" style={{ backgroundColor: '#f3f4f8' }}>
 
         {/* ── Topbar ── */}
-        <header
-          className="h-14 bg-white flex items-center justify-between px-4 lg:px-7 sticky top-0 z-30"
-          style={{ borderBottom: '1px solid #e8eaf0' }}
-        >
+        <header className="h-14 bg-white flex items-center justify-between px-4 lg:px-7 sticky top-0 z-30"
+          style={{ borderBottom: '1px solid #e8eaf0' }}>
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Hamburger — mobile only */}
-            <button
-              onClick={() => setShowSidebar(prev => !prev)}
-              className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-100 active:bg-gray-200 transition"
-              aria-label={showSidebar ? 'Close menu' : 'Open menu'}
-              aria-expanded={showSidebar}
-            >
+            <button onClick={() => setShowSidebar(prev => !prev)}
+              className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-100 transition"
+              aria-label="Toggle menu">
               <HamburgerIcon open={showSidebar} />
             </button>
-
-            {/* Logo mark on mobile */}
             <div className="flex items-center gap-2 lg:hidden">
               <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">T</div>
-              <span className="text-[14px] font-semibold text-gray-800 hidden xs:inline">Task Hub</span>
             </div>
-
             <span className="hidden lg:block text-[15px] font-semibold text-gray-800">Overview</span>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Search button */}
-            <button
-              onClick={() => setShowSearch(true)}
-              className="w-9 h-9 sm:w-auto sm:h-auto sm:flex sm:items-center sm:gap-2 sm:px-3.5 sm:py-2 rounded-xl text-[13px] text-gray-500 hover:bg-gray-50 active:bg-gray-100 transition font-medium flex items-center justify-center"
-              style={{ border: '1px solid #e8eaf0' }}
-              aria-label="Search"
-            >
+            {/* Search */}
+            <button onClick={() => setShowSearch(true)}
+              className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] text-gray-500 hover:bg-gray-50 transition font-medium"
+              style={{ border: '1px solid #e8eaf0' }}>
               <i className="ti ti-search text-sm" />
-              <span className="hidden sm:inline">Search</span>
+              <span>Search</span>
+            </button>
+            <button onClick={() => setShowSearch(true)}
+              className="sm:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 transition"
+              style={{ border: '1px solid #e8eaf0' }}>
+              <i className="ti ti-search text-sm" />
             </button>
 
-            {/* Bell */}
-            <div className="relative" data-notif>
-              <button
-                onClick={() => setShowNotif(!showNotif)}
+            {/* ── Notifications ── */}
+            <div className="relative" ref={notifRef}>
+              <button onClick={() => setShowNotif(!showNotif)}
                 className="w-9 h-9 rounded-xl flex items-center justify-center transition relative"
                 style={{
                   backgroundColor: unread > 0 ? '#fef3c7' : '#f3f4f6',
                   border: `1.5px solid ${unread > 0 ? '#f59e0b' : '#d1d5db'}`,
                   color: unread > 0 ? '#d97706' : '#374151',
-                }}
-                aria-label="Notifications"
-              >
+                }}>
                 <BellIcon />
                 {unread > 0 && (
-                  <span
-                    className="absolute -top-1 -right-1 w-[17px] h-[17px] text-white text-[10px] rounded-full flex items-center justify-center font-bold"
-                    style={{ backgroundColor: '#ef4444', border: '2px solid #fff' }}
-                  >
-                    {unread}
+                  <span className="absolute -top-1 -right-1 w-[17px] h-[17px] text-white text-[10px] rounded-full flex items-center justify-center font-bold"
+                    style={{ backgroundColor: '#ef4444', border: '2px solid #fff' }}>
+                    {unread > 9 ? '9+' : unread}
                   </span>
                 )}
               </button>
 
+              {/* ── Notification Dropdown — Fully Responsive ── */}
               {showNotif && (
-                <div
-                  className="absolute right-0 mt-2 bg-white rounded-2xl shadow-2xl z-50 overflow-hidden"
+                <div className="fixed sm:absolute z-50 bg-white rounded-2xl shadow-2xl overflow-hidden"
                   style={{
                     border: '1px solid #e8eaf0',
-                    width: 'min(320px, calc(100vw - 24px))',
-                  }}
-                >
-                  <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid #f0f1f5' }}>
-                    <span className="text-sm font-semibold text-gray-800">Notifications</span>
+                    // Mobile: full width centered at top
+                    top: window.innerWidth < 640 ? '64px' : 'calc(100% + 8px)',
+                    right: window.innerWidth < 640 ? '0' : '0',
+                    left: window.innerWidth < 640 ? '8px' : 'auto',
+                    width: window.innerWidth < 640 ? 'calc(100vw - 16px)' : '340px',
+                    maxHeight: '80vh',
+                  }}>
+
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-white z-10"
+                    style={{ borderBottom: '1px solid #f0f1f5' }}>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">{unread} unread</span>
+                      <span className="text-sm font-bold text-gray-800">Notifications</span>
                       {unread > 0 && (
-                        <button onClick={async () => {
-                          try {
-                            await api.patch('/tasks/notifications/read')
-                            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-                          } catch (err) { console.error(err) }
-                        }} className="text-xs text-blue-600 font-semibold px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">
+                        <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-600">
+                          {unread} new
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {unread > 0 && (
+                        <button onClick={markAllRead}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2.5 py-1 rounded-lg hover:bg-blue-50 transition">
                           Mark all read
                         </button>
                       )}
+                      <button onClick={() => setShowNotif(false)}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
-                  <div className="max-h-72 overflow-y-auto">
+
+                  {/* Scrollable List */}
+                  <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 60px)' }}>
                     {notifications.length === 0 ? (
-                      <p className="text-center py-8 text-xs text-gray-400">No notifications</p>
-                    ) : notifications.slice(0, 10).map(n => (
-                      <div key={n.id}
-                        onClick={() => { if (n.project_id) { setShowNotif(false); navigate(`/projects/${n.project_id}`) } }}
-                        className={`px-4 py-3 transition ${!n.is_read ? 'bg-blue-50/50' : ''} ${n.project_id ? 'cursor-pointer hover:bg-blue-50' : 'hover:bg-gray-50'}`}
-                        style={{ borderBottom: '1px solid #f5f6fa' }}>
-                        <div className="flex items-start gap-2">
-                          {!n.is_read && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-gray-700">{n.message}</p>
-                            <p className="text-[11px] text-gray-400 mt-0.5">{new Date(n.created_at).toLocaleString()}</p>
+                      <div className="text-center py-10">
+                        <div className="text-4xl mb-3">🔔</div>
+                        <p className="text-sm font-semibold text-gray-400">No notifications yet</p>
+                        <p className="text-xs text-gray-300 mt-1">You're all caught up!</p>
+                      </div>
+                    ) : (
+                      notifications.slice(0, 20).map((n, i) => (
+                        <div key={n.id}
+                          onClick={() => {
+                            if (n.reference_id) {
+                              setShowNotif(false)
+                            }
+                          }}
+                          className="px-4 py-3.5 transition cursor-default"
+                          style={{
+                            borderBottom: i < notifications.length - 1 ? '1px solid #f5f6fa' : 'none',
+                            backgroundColor: !n.is_read ? '#f0f7ff' : '#fff',
+                          }}>
+                          <div className="flex items-start gap-3">
+                            {/* Unread dot */}
+                            <div className="shrink-0 mt-1.5">
+                              <div className={`w-2 h-2 rounded-full ${!n.is_read ? 'bg-blue-500' : 'bg-transparent'}`} />
+                            </div>
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] text-gray-800 leading-relaxed font-medium">
+                                {n.message}
+                              </p>
+                              <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="12" cy="12" r="10"/>
+                                  <polyline points="12,6 12,12 16,14"/>
+                                </svg>
+                                {new Date(n.created_at).toLocaleString('en-US', {
+                                  month: 'short', day: 'numeric',
+                                  hour: '2-digit', minute: '2-digit'
+                                })}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
+
+                  {/* Footer */}
+                  {notifications.length > 0 && (
+                    <div className="px-4 py-3 bg-gray-50 sticky bottom-0"
+                      style={{ borderTop: '1px solid #f0f1f5' }}>
+                      <p className="text-center text-xs text-gray-400">
+                        {notifications.length} total · {unread} unread
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* New project button */}
+            {/* New Project */}
             {(user?.role === 'admin' || user?.role === 'manager') && (
-              <Link
-                to="/projects/new"
-                className="flex items-center gap-1.5 px-3 lg:px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold rounded-xl transition"
-              >
+              <Link to="/projects/new"
+                className="flex items-center gap-1.5 px-3 lg:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold rounded-xl transition">
                 <i className="ti ti-plus text-sm" />
                 <span className="hidden sm:inline">New project</span>
               </Link>
@@ -533,20 +557,20 @@ export default function DashboardPage() {
         </header>
 
         {/* ── Page Content ── */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
           <div className="mb-6 sm:mb-8">
-            <h1 className="text-[20px] sm:text-[22px] lg:text-[26px] font-bold text-gray-900">
+            <h1 className="text-[20px] sm:text-[24px] lg:text-[26px] font-bold text-gray-900">
               Good day, {user?.name?.split(' ')[0] || 'there'} 👋
             </h1>
-            <p className="text-[12px] sm:text-[13px] text-gray-400 mt-1">{today} · Here's what's happening across your projects</p>
+            <p className="text-[12px] sm:text-[13px] text-gray-400 mt-1">{today}</p>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 mb-7 sm:mb-9">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-5 mb-7 sm:mb-9">
             {[
               { icon: 'ti-folder',    label: 'Total projects',  value: projects.length, pct: Math.min((projects.length / 10) * 100, 100), badge: '+1 this month',        iconBg: '#eff6ff', iconColor: '#2563eb', barColor: '#2563eb' },
               { icon: 'ti-rocket',    label: 'Active projects', value: activeCount,     pct: activePct,                                    badge: `${activePct}% active`, iconBg: '#f0fdf4', iconColor: '#16a34a', barColor: '#22c55e' },
-              { icon: 'ti-checklist', label: 'Total tasks',     value: totalTasks,      pct: Math.min((totalTasks / 20) * 100, 100),       badge: 'across all',           iconBg: '#faf5ff', iconColor: '#9333ea', barColor: '#a855f7' },
+              { icon: 'ti-checklist', label: 'Total tasks',     value: totalTasks,      pct: Math.min((totalTasks / 50) * 100, 100),       badge: 'across all',           iconBg: '#faf5ff', iconColor: '#9333ea', barColor: '#a855f7' },
             ].map((c, i) => (
               <div key={i} className="bg-white rounded-2xl p-5 sm:p-6" style={{ border: '1px solid #e8eaf0' }}>
                 <div className="flex justify-between items-start mb-4 sm:mb-5">
@@ -557,7 +581,7 @@ export default function DashboardPage() {
                   <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold"
                     style={{ backgroundColor: '#f0fdf4', color: '#15803d' }}>{c.badge}</span>
                 </div>
-                <div className="text-[32px] sm:text-[36px] lg:text-[40px] font-bold text-gray-900 leading-none mb-1">{c.value}</div>
+                <div className="text-[32px] sm:text-[38px] font-bold text-gray-900 leading-none mb-1">{c.value}</div>
                 <div className="text-[12px] sm:text-[13px] text-gray-500 mb-4 sm:mb-5">{c.label}</div>
                 <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#f0f1f5' }}>
                   <div className="h-full rounded-full" style={{ width: `${c.pct}%`, backgroundColor: c.barColor }} />
@@ -566,14 +590,13 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Projects header */}
-          <div className="flex flex-col xs:flex-row xs:justify-between xs:items-center gap-3 mb-4 sm:mb-5">
+          {/* Projects Header */}
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-5">
             <h2 className="text-[15px] sm:text-[16px] font-bold text-gray-900">Your projects</h2>
-            {/* Filter pills — scrollable on very small screens */}
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
               {['all', 'active', 'completed', 'on_hold'].map(f => (
                 <button key={f} onClick={() => setFilter(f)}
-                  className="px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition whitespace-nowrap shrink-0"
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold transition whitespace-nowrap shrink-0"
                   style={filter === f
                     ? { backgroundColor: '#2563eb', color: '#fff', border: '1px solid #2563eb' }
                     : { backgroundColor: '#fff', color: '#6b7280', border: '1px solid #e8eaf0' }}>
@@ -583,7 +606,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Projects grid */}
+          {/* Projects Grid */}
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
               {[1,2,3].map(i => (
@@ -597,7 +620,8 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : filteredProjects.length === 0 ? (
-            <div className="text-center py-12 sm:py-16 bg-white rounded-2xl border border-dashed" style={{ borderColor: '#d1d5db' }}>
+            <div className="text-center py-12 sm:py-16 bg-white rounded-2xl border border-dashed"
+              style={{ borderColor: '#d1d5db' }}>
               <i className="ti ti-folder-open text-4xl text-gray-300 block mb-3" />
               <p className="text-sm font-semibold text-gray-500">No projects found</p>
               <p className="text-xs text-gray-400 mt-1 mb-5">
@@ -618,7 +642,7 @@ export default function DashboardPage() {
                 const barColor  = project.status === 'completed' ? '#22c55e' : '#2563eb'
                 return (
                   <Link key={project.id} to={`/projects/${project.id}`}
-                    className="bg-white rounded-2xl p-5 sm:p-6 transition-all duration-150 group block hover:shadow-md active:scale-[0.99]"
+                    className="bg-white rounded-2xl p-5 sm:p-6 transition-all duration-150 group block hover:shadow-md"
                     style={{ border: '1px solid #e8eaf0' }}>
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold"
@@ -629,7 +653,9 @@ export default function DashboardPage() {
                         {project.status?.replace('_', ' ')}
                       </span>
                     </div>
-                    <p className="text-[14px] font-semibold text-gray-900 mb-1.5 group-hover:text-blue-600 transition">{project.name}</p>
+                    <p className="text-[14px] font-semibold text-gray-900 mb-1.5 group-hover:text-blue-600 transition line-clamp-1">
+                      {project.name}
+                    </p>
                     <p className="text-xs text-gray-400 mb-4 line-clamp-2 leading-relaxed">
                       {project.description || 'No description provided'}
                     </p>
@@ -643,10 +669,11 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="flex justify-between items-center pt-3.5" style={{ borderTop: '1px solid #f5f6fa' }}>
-                      <span className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
-                        <i className="ti ti-users text-[13px]" />{project.team_name || 'No team'}
+                      <span className="flex items-center gap-1.5 text-xs text-gray-400 font-medium min-w-0">
+                        <i className="ti ti-users text-[13px] shrink-0" />
+                        <span className="truncate">{project.team_name || 'No team'}</span>
                       </span>
-                      <span className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+                      <span className="flex items-center gap-1.5 text-xs text-gray-400 font-medium shrink-0 ml-2">
                         <i className="ti ti-clipboard-list text-[13px]" />
                         {project.task_count} {parseInt(project.task_count) === 1 ? 'task' : 'tasks'}
                       </span>
@@ -659,14 +686,15 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* ── Slide-in animation keyframe ── */}
       <style>{`
         @keyframes slideInLeft {
           from { transform: translateX(-100%); }
           to   { transform: translateX(0); }
         }
-        /* Hide scrollbar on filter strip */
-        .filter-strip::-webkit-scrollbar { display: none; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
       `}</style>
     </div>
   )
