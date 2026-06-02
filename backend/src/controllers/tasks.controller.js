@@ -51,7 +51,6 @@ const createTask = async (req, res) => {
       [req.user.id, project_id, result.insertId, 'task_created', `Task "${title}" was created`]
     );
 
-    // Notify assigned user
     if (assigned_to) {
       await db.query(
         'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
@@ -59,7 +58,6 @@ const createTask = async (req, res) => {
       );
     }
 
-    // Notify admins/managers that a new task was created
     await notifyAdminsAndManagers(
       `New task created: "${title}" in project by ${req.user.name}`,
       result.insertId,
@@ -159,18 +157,17 @@ const updateTask = async (req, res) => {
 
     await db.query(
       `UPDATE tasks SET
-        title = COALESCE(?, title),
+        title       = COALESCE(?, title),
         description = COALESCE(?, description),
         assigned_to = COALESCE(?, assigned_to),
-        priority = COALESCE(?, priority),
-        due_date = COALESCE(?, due_date),
-        status = COALESCE(?, status),
-        position = COALESCE(?, position)
+        priority    = COALESCE(?, priority),
+        due_date    = COALESCE(?, due_date),
+        status      = COALESCE(?, status),
+        position    = COALESCE(?, position)
        WHERE id = ?`,
       [title, description, assigned_to, priority, due_date, status, position, req.params.id]
     );
 
-    // Status changed
     if (status && status !== task.status) {
       await db.query(
         'INSERT INTO activity_logs (user_id, project_id, task_id, action, details) VALUES (?, ?, ?, ?, ?)',
@@ -178,7 +175,6 @@ const updateTask = async (req, res) => {
          `Task "${task.title}" moved to ${status}`]
       );
 
-      // Notify assigned user
       if (task.assigned_to) {
         await db.query(
           'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
@@ -187,7 +183,6 @@ const updateTask = async (req, res) => {
         );
       }
 
-      // Notify admins/managers
       await notifyAdminsAndManagers(
         `Task "${task.title}" status changed to ${status} by ${req.user.name}`,
         req.params.id,
@@ -195,7 +190,6 @@ const updateTask = async (req, res) => {
       );
     }
 
-    // Reassigned to someone new
     if (assigned_to && assigned_to !== task.assigned_to) {
       await db.query(
         'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
@@ -228,7 +222,6 @@ const deleteTask = async (req, res) => {
 
     await db.query('DELETE FROM tasks WHERE id = ?', [req.params.id]);
 
-    // Notify admins/managers
     await notifyAdminsAndManagers(
       `Task "${task.title}" was deleted by ${req.user.name}`,
       task.project_id,
@@ -267,7 +260,6 @@ const addComment = async (req, res) => {
       [req.params.id, req.user.id, content]
     );
 
-    // Notify task assignee if commenter is not the assignee
     if (task.assigned_to && task.assigned_to !== req.user.id) {
       await db.query(
         'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
@@ -277,7 +269,6 @@ const addComment = async (req, res) => {
       );
     }
 
-    // Notify admins/managers about the comment
     await notifyAdminsAndManagers(
       `${req.user.name} commented on task "${task.title}": "${content.substring(0, 60)}${content.length > 60 ? '...' : ''}"`,
       req.params.id,
@@ -301,13 +292,18 @@ const addComment = async (req, res) => {
   }
 };
 
-// GET notifications — joins tasks to get project_id for navigation
+// GET notifications — smart join to get project_id for navigation
 const getNotifications = async (req, res) => {
   try {
     const [notifications] = await db.query(
-      `SELECT n.*, t.project_id
+      `SELECT
+        n.*,
+        COALESCE(t.project_id, n.reference_id) AS project_id
        FROM notifications n
-       LEFT JOIN tasks t ON n.reference_id = t.id
+       LEFT JOIN tasks t ON (
+         n.type IN ('task_assigned', 'task_updated', 'comment')
+         AND n.reference_id = t.id
+       )
        WHERE n.user_id = ?
        ORDER BY n.created_at DESC
        LIMIT 20`,

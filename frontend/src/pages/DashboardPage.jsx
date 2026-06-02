@@ -60,17 +60,18 @@ export default function DashboardPage() {
   const navigate  = useNavigate()
   const location  = useLocation()
 
-  const [projects, setProjects]           = useState([])
-  const [notifications, setNotifications] = useState([])
-  const [loading, setLoading]             = useState(true)
-  const [showNotif, setShowNotif]         = useState(false)
-  const [showUserMenu, setShowUserMenu]   = useState(false)
-  const [showSidebar, setShowSidebar]     = useState(false)
-  const [filter, setFilter]               = useState('all')
-  const [showSearch, setShowSearch]       = useState(false)
-  const [searchQuery, setSearchQuery]     = useState('')
+  const [projects, setProjects]               = useState([])
+  const [notifications, setNotifications]     = useState([])
+  const [loading, setLoading]                 = useState(true)
+  const [showNotif, setShowNotif]             = useState(false)
+  const [showUserMenu, setShowUserMenu]       = useState(false)
+  const [showSidebar, setShowSidebar]         = useState(false)
+  const [filter, setFilter]                   = useState('all')
+  const [showSearch, setShowSearch]           = useState(false)
+  const [searchQuery, setSearchQuery]         = useState('')
+  const [navigatingNotif, setNavigatingNotif] = useState(null)
   const searchInputRef = useRef(null)
-  const notifRef = useRef(null)
+  const notifRef       = useRef(null)
 
   useEffect(() => { fetchProjects(); fetchNotifications() }, [])
 
@@ -80,9 +81,7 @@ export default function DashboardPage() {
   }, [showSearch])
 
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) setShowSidebar(false)
-    }
+    const handleResize = () => { if (window.innerWidth >= 1024) setShowSidebar(false) }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
@@ -106,7 +105,6 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
-  // Close notification when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (showNotif && notifRef.current && !notifRef.current.contains(e.target)) {
@@ -139,7 +137,63 @@ export default function DashboardPage() {
     } catch (err) { console.error(err) }
   }
 
+  // ── Navigate to correct page when notification is clicked ──
+  const handleNotifClick = async (n) => {
+    setShowNotif(false)
+    setNavigatingNotif(n.id)
+
+    try {
+      // task_assigned, task_updated, comment — fetch task to get project_id
+      if (
+        n.type === 'task_assigned' ||
+        n.type === 'task_updated'  ||
+        n.type === 'comment'
+      ) {
+        if (n.reference_id) {
+          try {
+            const res = await api.get(`/tasks/${n.reference_id}`)
+            const task = res.data.task
+            if (task?.project_id) {
+              navigate(`/projects/${task.project_id}`)
+              return
+            }
+          } catch {
+            // task may be deleted — fall through
+          }
+        }
+      }
+
+      // system notifications — reference_id IS the project_id
+      if (n.type === 'system') {
+        if (n.reference_id) {
+          navigate(`/projects/${n.reference_id}`)
+          return
+        }
+      }
+
+      // project_created, project_archived, project_updated
+      if (
+        n.type === 'project_created'  ||
+        n.type === 'project_archived' ||
+        n.type === 'project_updated'
+      ) {
+        if (n.reference_id) {
+          navigate(`/projects/${n.reference_id}`)
+          return
+        }
+      }
+
+      navigate('/dashboard')
+    } catch (err) {
+      console.error('Notification navigation error:', err)
+      navigate('/dashboard')
+    } finally {
+      setNavigatingNotif(null)
+    }
+  }
+
   const handleLogout = () => { logout(); navigate('/login') }
+
   const unread           = notifications.filter(n => !n.is_read).length
   const activeCount      = projects.filter(p => p.status === 'active').length
   const totalTasks       = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
@@ -181,6 +235,25 @@ export default function DashboardPage() {
     ]),
   ]
 
+  const getNotifIcon = (type) => {
+    const icons = {
+      task_assigned:    { icon: '📋', bg: '#eff6ff', color: '#2563eb' },
+      task_updated:     { icon: '🔄', bg: '#faf5ff', color: '#9333ea' },
+      comment:          { icon: '💬', bg: '#fefce8', color: '#ca8a04' },
+      comment_added:    { icon: '💬', bg: '#fefce8', color: '#ca8a04' },
+      project_created:  { icon: '📁', bg: '#f0fdf4', color: '#16a34a' },
+      project_archived: { icon: '📦', bg: '#fff7ed', color: '#ea580c' },
+      project_updated:  { icon: '✏️', bg: '#f0f9ff', color: '#0284c7' },
+      system:           { icon: '🔔', bg: '#f0fdf4', color: '#16a34a' },
+    }
+    return icons[type] || { icon: '🔔', bg: '#f3f4f6', color: '#6b7280' }
+  }
+
+  const isClickable = (type) => [
+    'task_assigned', 'task_updated', 'comment', 'comment_added',
+    'project_created', 'project_archived', 'project_updated', 'system'
+  ].includes(type)
+
   const SidebarContent = () => (
     <div className="flex flex-col h-full" style={{ backgroundColor: '#1a2235' }}>
       <div className="flex items-center justify-between px-5 py-5"
@@ -191,8 +264,10 @@ export default function DashboardPage() {
         </div>
         <button onClick={() => setShowSidebar(false)}
           className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
       </div>
@@ -235,7 +310,6 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* User at bottom */}
       <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
         <div className="relative">
           <button onClick={() => setShowUserMenu(!showUserMenu)}
@@ -268,9 +342,9 @@ export default function DashboardPage() {
               </div>
               <div className="py-1">
                 {[
-                  { icon: 'ti-user',     label: 'View Profile',     action: () => { setShowUserMenu(false); setShowSidebar(false); navigate('/profile') } },
-                  { icon: 'ti-settings', label: 'Settings',          action: () => { setShowUserMenu(false); navigate('/settings') } },
-                  { icon: 'ti-lock',     label: 'Change Password',   action: () => { setShowUserMenu(false); navigate('/settings?tab=password') } },
+                  { icon: 'ti-user',     label: 'View Profile',   action: () => { setShowUserMenu(false); setShowSidebar(false); navigate('/profile') } },
+                  { icon: 'ti-settings', label: 'Settings',        action: () => { setShowUserMenu(false); navigate('/settings') } },
+                  { icon: 'ti-lock',     label: 'Change Password', action: () => { setShowUserMenu(false); navigate('/settings?tab=password') } },
                 ].map((item, i) => (
                   <button key={i} onClick={item.action}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
@@ -300,7 +374,7 @@ export default function DashboardPage() {
   return (
     <div className="flex min-h-screen">
 
-      {/* ── Search Modal ── */}
+      {/* Search Modal */}
       {showSearch && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4"
           style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}
@@ -308,7 +382,8 @@ export default function DashboardPage() {
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
             style={{ border: '1px solid #e8eaf0' }}
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid #f0f1f5' }}>
+            <div className="flex items-center gap-3 px-4 py-3.5"
+              style={{ borderBottom: '1px solid #f0f1f5' }}>
               <i className="ti ti-search text-gray-400 text-[18px] shrink-0" />
               <input ref={searchInputRef} type="text" value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -362,7 +437,9 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold text-gray-800 truncate">{p.name}</p>
-                        <p className="text-[11px] text-gray-400 truncate">{p.description || 'No description'}</p>
+                        <p className="text-[11px] text-gray-400 truncate">
+                          {p.description || 'No description'} · {p.team_name || 'No team'}
+                        </p>
                       </div>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${statusStyle[p.status] || 'bg-gray-100 text-gray-500'}`}>
                         {p.status?.replace('_', ' ')}
@@ -376,7 +453,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Mobile Sidebar Overlay ── */}
+      {/* Mobile Sidebar Overlay */}
       {showSidebar && (
         <div className="fixed inset-0 z-40 lg:hidden"
           style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(1px)' }}
@@ -389,21 +466,21 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Desktop Sidebar ── */}
+      {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-[240px] shrink-0 flex-col fixed top-0 left-0 h-screen z-40">
         <SidebarContent />
       </aside>
 
-      {/* ── Main Content ── */}
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-[240px]" style={{ backgroundColor: '#f3f4f8' }}>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-[240px]"
+        style={{ backgroundColor: '#f3f4f8' }}>
 
-        {/* ── Topbar ── */}
+        {/* Topbar */}
         <header className="h-14 bg-white flex items-center justify-between px-4 lg:px-7 sticky top-0 z-30"
           style={{ borderBottom: '1px solid #e8eaf0' }}>
           <div className="flex items-center gap-2 sm:gap-3">
             <button onClick={() => setShowSidebar(prev => !prev)}
-              className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-100 transition"
-              aria-label="Toggle menu">
+              className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-600 hover:bg-gray-100 transition">
               <HamburgerIcon open={showSidebar} />
             </button>
             <div className="flex items-center gap-2 lg:hidden">
@@ -417,8 +494,7 @@ export default function DashboardPage() {
             <button onClick={() => setShowSearch(true)}
               className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] text-gray-500 hover:bg-gray-50 transition font-medium"
               style={{ border: '1px solid #e8eaf0' }}>
-              <i className="ti ti-search text-sm" />
-              <span>Search</span>
+              <i className="ti ti-search text-sm" /> Search
             </button>
             <button onClick={() => setShowSearch(true)}
               className="sm:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 transition"
@@ -426,7 +502,7 @@ export default function DashboardPage() {
               <i className="ti ti-search text-sm" />
             </button>
 
-            {/* ── Notifications ── */}
+            {/* Bell */}
             <div className="relative" ref={notifRef}>
               <button onClick={() => setShowNotif(!showNotif)}
                 className="w-9 h-9 rounded-xl flex items-center justify-center transition relative"
@@ -444,16 +520,15 @@ export default function DashboardPage() {
                 )}
               </button>
 
-              {/* ── Notification Dropdown — Fully Responsive ── */}
+              {/* Notification Dropdown */}
               {showNotif && (
                 <div className="fixed sm:absolute z-50 bg-white rounded-2xl shadow-2xl overflow-hidden"
                   style={{
                     border: '1px solid #e8eaf0',
-                    // Mobile: full width centered at top
                     top: window.innerWidth < 640 ? '64px' : 'calc(100% + 8px)',
                     right: window.innerWidth < 640 ? '0' : '0',
                     left: window.innerWidth < 640 ? '8px' : 'auto',
-                    width: window.innerWidth < 640 ? 'calc(100vw - 16px)' : '340px',
+                    width: window.innerWidth < 640 ? 'calc(100vw - 16px)' : '360px',
                     maxHeight: '80vh',
                   }}>
 
@@ -477,15 +552,17 @@ export default function DashboardPage() {
                       )}
                       <button onClick={() => setShowNotif(false)}
                         className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                       </button>
                     </div>
                   </div>
 
-                  {/* Scrollable List */}
-                  <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 60px)' }}>
+                  {/* List */}
+                  <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 100px)' }}>
                     {notifications.length === 0 ? (
                       <div className="text-center py-10">
                         <div className="text-4xl mb-3">🔔</div>
@@ -493,42 +570,54 @@ export default function DashboardPage() {
                         <p className="text-xs text-gray-300 mt-1">You're all caught up!</p>
                       </div>
                     ) : (
-                      notifications.slice(0, 20).map((n, i) => (
-                        <div key={n.id}
-                          onClick={() => {
-                            if (n.reference_id) {
-                              setShowNotif(false)
-                            }
-                          }}
-                          className="px-4 py-3.5 transition cursor-default"
-                          style={{
-                            borderBottom: i < notifications.length - 1 ? '1px solid #f5f6fa' : 'none',
-                            backgroundColor: !n.is_read ? '#f0f7ff' : '#fff',
-                          }}>
-                          <div className="flex items-start gap-3">
-                            {/* Unread dot */}
-                            <div className="shrink-0 mt-1.5">
-                              <div className={`w-2 h-2 rounded-full ${!n.is_read ? 'bg-blue-500' : 'bg-transparent'}`} />
-                            </div>
-                            {/* Content */}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[13px] text-gray-800 leading-relaxed font-medium">
-                                {n.message}
-                              </p>
-                              <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <circle cx="12" cy="12" r="10"/>
-                                  <polyline points="12,6 12,12 16,14"/>
-                                </svg>
-                                {new Date(n.created_at).toLocaleString('en-US', {
-                                  month: 'short', day: 'numeric',
-                                  hour: '2-digit', minute: '2-digit'
-                                })}
-                              </p>
+                      notifications.slice(0, 20).map((n, i) => {
+                        const { icon, bg, color } = getNotifIcon(n.type)
+                        const clickable = isClickable(n.type) && n.reference_id
+                        const isLoading = navigatingNotif === n.id
+                        return (
+                          <div key={n.id}
+                            onClick={() => clickable && handleNotifClick(n)}
+                            className="px-4 py-3.5 transition"
+                            style={{
+                              borderBottom: i < notifications.length - 1 ? '1px solid #f5f6fa' : 'none',
+                              backgroundColor: !n.is_read ? '#f0f7ff' : '#fff',
+                              cursor: clickable ? 'pointer' : 'default',
+                            }}
+                            onMouseEnter={e => { if (clickable) e.currentTarget.style.backgroundColor = '#e8f4fd' }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = !n.is_read ? '#f0f7ff' : '#fff' }}>
+                            <div className="flex items-start gap-3">
+                              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base"
+                                style={{ backgroundColor: bg, color }}>
+                                {isLoading ? <i className="ti ti-loader animate-spin text-sm" /> : icon}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[13px] text-gray-800 leading-relaxed font-medium">{n.message}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <p className="text-[11px] text-gray-400 flex items-center gap-1">
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                                      stroke="currentColor" strokeWidth="2">
+                                      <circle cx="12" cy="12" r="10"/>
+                                      <polyline points="12,6 12,12 16,14"/>
+                                    </svg>
+                                    {new Date(n.created_at).toLocaleString('en-US', {
+                                      month: 'short', day: 'numeric',
+                                      hour: '2-digit', minute: '2-digit'
+                                    })}
+                                  </p>
+                                  {clickable && (
+                                    <span className="text-[10px] text-blue-500 font-semibold flex items-center gap-0.5">
+                                      View <i className="ti ti-arrow-right text-[10px]" />
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {!n.is_read && (
+                                <div className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5" />
+                              )}
                             </div>
                           </div>
-                        </div>
-                      ))
+                        )
+                      })
                     )}
                   </div>
 
@@ -556,7 +645,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* ── Page Content ── */}
+        {/* Page Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
           <div className="mb-6 sm:mb-8">
             <h1 className="text-[20px] sm:text-[24px] lg:text-[26px] font-bold text-gray-900">
