@@ -45,4 +45,4 @@ npm run dev
 Jean Pierre Ndikumana — Internship Project 2026
 
 ## Status
-🚧 In Development
+🚧 Completed
