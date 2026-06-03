@@ -15,14 +15,6 @@ const statusColor = {
   on_hold:   'bg-amber-100 text-amber-700',
 }
 
-const BellIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-)
-
 export default function ReportsPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -32,9 +24,7 @@ export default function ReportsPage() {
   const [stats, setStats]               = useState([])
   const [users, setUsers]               = useState([])
   const [totalUsersCount, setTotalUsersCount] = useState(0)
-  const [notifications, setNotifications] = useState([])
   const [loading, setLoading]           = useState(true)
-  const [showNotif, setShowNotif]       = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
 
   useEffect(() => {
@@ -50,28 +40,24 @@ export default function ReportsPage() {
       const requests = [
         api.get('/projects'),
         api.get('/projects/stats'),
-        api.get('/tasks/notifications'),
       ]
 
-      // Admin gets full user list, manager gets just the count
       if (user?.role === 'admin') {
         requests.push(api.get('/users'))
       } else {
         requests.push(api.get('/users/count'))
       }
 
-      const [projRes, statsRes, notifRes, usersRes] = await Promise.all(requests)
+      const [projRes, statsRes, usersRes] = await Promise.all(requests)
 
       setProjects(projRes.data.projects || [])
       setStats(statsRes.data.stats || [])
-      setNotifications(notifRes.data.notifications || [])
 
       if (user?.role === 'admin') {
         const userList = usersRes.data.users || []
         setUsers(userList)
         setTotalUsersCount(userList.length)
       } else {
-        // Manager — just the count
         setUsers([])
         setTotalUsersCount(usersRes.data.count ?? usersRes.data.total ?? 0)
       }
@@ -81,7 +67,7 @@ export default function ReportsPage() {
   }
 
   const handleLogout = () => { logout(); navigate('/login') }
-  const unread = notifications.filter(n => !n.is_read).length
+
   const totalTasks     = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
   const activeProjects = projects.filter(p => p.status === 'active').length
 
@@ -226,69 +212,9 @@ export default function ReportsPage() {
       <div className="flex-1 flex flex-col min-w-0 ml-[240px]" style={{ backgroundColor: '#f3f4f8' }}>
 
         {/* Topbar */}
-        <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
+        <header className="h-14 bg-white flex items-center px-7 sticky top-0 z-30"
           style={{ borderBottom: '1px solid #e8eaf0' }}>
           <span className="text-[15px] font-semibold text-gray-800">Reports</span>
-
-          {/* Bell */}
-          <div className="relative">
-            <button onClick={() => setShowNotif(!showNotif)} aria-label="Notifications"
-              className="w-9 h-9 rounded-xl flex items-center justify-center transition"
-              style={{
-                backgroundColor: unread > 0 ? '#fef3c7' : '#f3f4f6',
-                border: `1.5px solid ${unread > 0 ? '#f59e0b' : '#d1d5db'}`,
-                color: unread > 0 ? '#d97706' : '#374151',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = unread > 0 ? '#fde68a' : '#e5e7eb' }}
-              onMouseLeave={e => { e.currentTarget.style.backgroundColor = unread > 0 ? '#fef3c7' : '#f3f4f6' }}>
-              <BellIcon />
-              {unread > 0 && (
-                <span className="absolute -top-1 -right-1 w-[17px] h-[17px] text-white text-[10px] rounded-full flex items-center justify-center font-bold"
-                  style={{ backgroundColor: '#ef4444', border: '2px solid #fff' }}>
-                  {unread}
-                </span>
-              )}
-            </button>
-
-            {showNotif && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl z-50 overflow-hidden"
-                style={{ border: '1px solid #e8eaf0' }}>
-                <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid #f0f1f5' }}>
-                  <span className="text-sm font-semibold text-gray-800">Notifications</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">{unread} unread</span>
-                    {unread > 0 && (
-                      <button onClick={async () => {
-                        try {
-                          await api.patch('/tasks/notifications/read')
-                          setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-                        } catch (err) { console.error(err) }
-                      }} className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">
-                        Mark all read
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="max-h-72 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <p className="text-center py-8 text-xs text-gray-400">No notifications</p>
-                  ) : notifications.slice(0, 10).map(n => (
-                    <div key={n.id}
-                      className={`px-4 py-3 hover:bg-gray-50 transition ${!n.is_read ? 'bg-blue-50/50' : ''}`}
-                      style={{ borderBottom: '1px solid #f5f6fa' }}>
-                      <div className="flex items-start gap-2">
-                        {!n.is_read && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
-                        <div>
-                          <p className="text-xs text-gray-700">{n.message}</p>
-                          <p className="text-[11px] text-gray-400 mt-0.5">{new Date(n.created_at).toLocaleString()}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
         </header>
 
         <main className="flex-1 p-8 space-y-6">

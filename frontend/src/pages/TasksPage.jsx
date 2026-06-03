@@ -17,35 +17,61 @@ const STATUS_STYLE = {
   done:        { bg: '#f0fdf4', text: '#16a34a', label: 'Done' },
 }
 
+const getAvatarUrl = (avatar) => {
+  if (!avatar) return null
+  if (avatar.startsWith('data:') || avatar.startsWith('http')) return avatar
+  return `http://localhost:5000${avatar}`
+}
+
+const Avatar = ({ user, size = 8 }) => {
+  const avatarUrl = getAvatarUrl(user?.avatar)
+  const initials  = user?.name?.charAt(0)?.toUpperCase() || 'U'
+  const px        = size * 4
+  return (
+    <div style={{
+      width: px, height: px, borderRadius: 10,
+      backgroundColor: '#3b82f6',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', flexShrink: 0,
+      fontSize: px * 0.35, fontWeight: 700, color: '#fff',
+    }}>
+      {avatarUrl
+        ? <img src={avatarUrl} alt="avatar"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : initials}
+    </div>
+  )
+}
+
 export default function TasksPage() {
   const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const navigate  = useNavigate()
+  const location  = useLocation()
 
-  const [tasks, setTasks]                 = useState([])
-  const [projects, setProjects]           = useState([])
-  const [notifications, setNotifications] = useState([])
-  const [loading, setLoading]             = useState(true)
-  const [filter, setFilter]               = useState('all')
-  const [priority, setPriority]           = useState('all')
-  const [search, setSearch]               = useState('')
-  const [sortBy, setSortBy]               = useState('due_date')
-  const [showNotif, setShowNotif]         = useState(false)
-  const [showUserMenu, setShowUserMenu]   = useState(false)
+  const [tasks, setTasks]               = useState([])
+  const [projects, setProjects]         = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [filter, setFilter]             = useState('all')
+  const [priority, setPriority]         = useState('all')
+  const [search, setSearch]             = useState('')
+  const [sortBy, setSortBy]             = useState('due_date')
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showSidebar, setShowSidebar]   = useState(false)
 
   useEffect(() => { fetchData() }, [])
+
+  // Close sidebar on route change
+  useEffect(() => { setShowSidebar(false) }, [location.pathname])
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [tasksRes, projRes, notifRes] = await Promise.all([
+      const [tasksRes, projRes] = await Promise.all([
         api.get('/tasks/my'),
         api.get('/projects'),
-        api.get('/tasks/notifications'),
       ])
       setTasks(tasksRes.data.tasks || [])
       setProjects(projRes.data.projects || [])
-      setNotifications(notifRes.data.notifications || [])
     } catch (err) {
       console.error('fetchData error:', err.response?.data || err.message)
     } finally {
@@ -61,7 +87,6 @@ export default function TasksPage() {
   }
 
   const handleLogout = () => { logout(); navigate('/login') }
-  const unread    = notifications.filter(n => !n.is_read).length
   const totalTasks = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)
 
   const filtered = tasks
@@ -103,198 +128,178 @@ export default function TasksPage() {
   const workspaceNav = [
     { to: '/teams', icon: 'ti-users', label: 'Teams' },
     ...(user?.role === 'admin' || user?.role === 'manager'
-      ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }]
-      : []),
-    ...(user?.role === 'admin' ? [
-      { to: '/admin', icon: 'ti-shield', label: 'Admin Settings' },
-    ] : []),
+      ? [{ to: '/reports', icon: 'ti-chart-bar', label: 'Reports' }] : []),
+    ...(user?.role === 'admin'
+      ? [{ to: '/admin', icon: 'ti-shield', label: 'Admin Settings' }] : []),
     { to: '/settings', icon: 'ti-settings', label: 'Settings' },
   ]
+
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full" style={{ backgroundColor: '#1a2235' }}>
+      {/* Logo */}
+      <div className="flex items-center justify-between px-5 py-5"
+        style={{ borderBottom: '1px solid #253047' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold shrink-0">T</div>
+          <span className="text-[16px] font-semibold text-white">Task Hub</span>
+        </div>
+        <button onClick={() => setShowSidebar(false)}
+          className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Nav */}
+      <div className="flex-1 px-3 py-4 overflow-y-auto">
+        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
+        {mainNav.map(item => {
+          const active = location.pathname === item.to
+          return (
+            <Link key={item.to} to={item.to}
+              onClick={() => setShowSidebar(false)}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
+              style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
+              <i className={`ti ${item.icon} text-[16px]`} />
+              <span className="flex-1">{item.label}</span>
+              {item.count !== undefined && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                  style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
+                  {item.count}
+                </span>
+              )}
+            </Link>
+          )
+        })}
+
+        <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
+        {workspaceNav.map(item => {
+          const active = location.pathname === item.to
+          return (
+            <Link key={item.to} to={item.to}
+              onClick={() => setShowSidebar(false)}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition mb-0.5"
+              style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
+              <i className={`ti ${item.icon} text-[16px]`} />
+              {item.label}
+            </Link>
+          )
+        })}
+      </div>
+
+      {/* User menu */}
+      <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
+        <div className="relative">
+          <button onClick={() => setShowUserMenu(!showUserMenu)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5 mb-1">
+            <Avatar user={user} size={8} />
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-[13px] font-semibold text-white truncate">{user?.name}</p>
+              <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
+            </div>
+            <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`}
+              style={{ color: '#6b7a99' }} />
+          </button>
+
+          {showUserMenu && (
+            <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+              <div className="px-4 py-3 border-b border-gray-100"
+                style={{ background: 'linear-gradient(to right, #eff6ff, #eef2ff)' }}>
+                <div className="flex items-center gap-3">
+                  <Avatar user={user} size={10} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-800 truncate">{user?.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold mt-1 inline-block ${
+                      user?.role === 'admin'   ? 'bg-red-100 text-red-600' :
+                      user?.role === 'manager' ? 'bg-purple-100 text-purple-600' :
+                                                 'bg-green-100 text-green-600'
+                    }`}>{user?.role}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="py-1">
+                {[
+                  { icon: 'ti-user',     label: 'View Profile',   action: () => { setShowUserMenu(false); setShowSidebar(false); navigate('/profile') } },
+                  { icon: 'ti-settings', label: 'Settings',        action: () => { setShowUserMenu(false); setShowSidebar(false); navigate('/settings') } },
+                  { icon: 'ti-lock',     label: 'Change Password', action: () => { setShowUserMenu(false); setShowSidebar(false); navigate('/settings?tab=password') } },
+                ].map((item, i) => (
+                  <button key={i} onClick={item.action}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
+                    <i className={`ti ${item.icon} text-base text-gray-400`} /> {item.label}
+                  </button>
+                ))}
+                {user?.role === 'admin' && (
+                  <button onClick={() => { setShowUserMenu(false); setShowSidebar(false); navigate('/admin') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition text-left">
+                    <i className="ti ti-shield text-base" /> Admin Panel
+                  </button>
+                )}
+              </div>
+              <div style={{ borderTop: '1px solid #f3f4f6' }}>
+                <button onClick={() => { setShowUserMenu(false); handleLogout() }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 transition text-left">
+                  <i className="ti ti-logout text-base" /> Logout
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex min-h-screen">
 
-      {/* Sidebar */}
-      <aside className="w-[260px] shrink-0 flex flex-col fixed top-0 left-0 h-screen z-40"
-        style={{ backgroundColor: '#1a2235' }}>
-        <div className="flex items-center gap-3 px-6 py-5">
-          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center text-white text-base font-bold">T</div>
-          <span className="text-[16px] font-semibold text-white">Task Hub</span>
-        </div>
-
-        <div className="flex-1 px-3 py-2 overflow-y-auto">
-          <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Main</p>
-          {mainNav.map(item => {
-            const active = location.pathname === item.to
-            return (
-              <Link key={item.to} to={item.to}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
-                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
-                <i className={`ti ${item.icon} text-base`} />
-                <span className="flex-1 font-medium">{item.label}</span>
-                {item.count !== undefined && (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                    style={{ backgroundColor: active ? '#3d5280' : '#253047', color: active ? '#93c5fd' : '#6b7a99' }}>
-                    {item.count}
-                  </span>
-                )}
-              </Link>
-            )
-          })}
-
-          <p className="px-3 py-2 mt-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a99' }}>Workspace</p>
-          {workspaceNav.map(item => {
-            const active = location.pathname === item.to
-            return (
-              <Link key={item.to} to={item.to}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition mb-0.5"
-                style={{ backgroundColor: active ? '#2d3f5e' : 'transparent', color: active ? '#ffffff' : '#8b9ab8' }}>
-                <i className={`ti ${item.icon} text-base`} />
-                <span className="font-medium">{item.label}</span>
-              </Link>
-            )
-          })}
-        </div>
-
-        {/* User menu */}
-        <div className="px-3 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid #253047' }}>
-          <div className="relative">
-            <button onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-white/5">
-              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-[13px] font-medium text-white truncate">{user?.name}</p>
-                <p className="text-[11px] capitalize" style={{ color: '#6b7a99' }}>{user?.role}</p>
-              </div>
-              <i className={`ti ${showUserMenu ? 'ti-chevron-down' : 'ti-chevron-up'} text-xs`}
-                style={{ color: '#6b7a99' }} />
-            </button>
-
-            {showUserMenu && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-                <div className="px-4 py-3 border-b border-gray-100"
-                  style={{ background: 'linear-gradient(to right, #eff6ff, #eef2ff)' }}>
-                  <div className="flex items-center gap-3">
-                   <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
-  {user?.avatar
-    ? <img src={`http://localhost:5000${user.avatar}`} alt="avatar"
-        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-    : user?.name?.charAt(0)?.toUpperCase()
-  }
-</div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-800">{user?.name}</p>
-                      <p className="text-xs text-gray-400">{user?.email}</p>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold mt-1 inline-block ${
-                        user?.role === 'admin'   ? 'bg-red-100 text-red-600' :
-                        user?.role === 'manager' ? 'bg-purple-100 text-purple-600' :
-                                                   'bg-green-100 text-green-600'
-                      }`}>{user?.role}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="py-1">
-                  <button onClick={() => { setShowUserMenu(false); navigate('/profile') }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
-                    <i className="ti ti-user text-base text-gray-400" /> View Profile
-                  </button>
-                  <button onClick={() => { setShowUserMenu(false); navigate('/settings') }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
-                    <i className="ti ti-settings text-base text-gray-400" /> Settings
-                  </button>
-                  <button onClick={() => { setShowUserMenu(false); navigate('/settings?tab=password') }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
-                    <i className="ti ti-lock text-base text-gray-400" /> Change Password
-                  </button>
-                  {user?.role === 'admin' && (
-                    <button onClick={() => { setShowUserMenu(false); navigate('/admin') }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition text-left">
-                      <i className="ti ti-shield text-base" /> Admin Panel
-                    </button>
-                  )}
-                </div>
-                <div style={{ borderTop: '1px solid #f3f4f6' }}>
-                  <button onClick={() => { setShowUserMenu(false); handleLogout() }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 transition text-left">
-                    <i className="ti ti-logout text-base" /> Logout
-                  </button>
-                </div>
-              </div>
-            )}
+      {/* Mobile sidebar overlay */}
+      {showSidebar && (
+        <div className="fixed inset-0 z-50 lg:hidden"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowSidebar(false)}>
+          <div className="w-[260px] h-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <SidebarContent />
           </div>
         </div>
+      )}
+
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-[240px] shrink-0 flex-col fixed top-0 left-0 h-screen z-40">
+        <SidebarContent />
       </aside>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 ml-[260px]" style={{ backgroundColor: '#f3f4f8' }}>
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-[240px]" style={{ backgroundColor: '#f3f4f8' }}>
 
-        {/* Topbar */}
-        <header className="h-14 bg-white flex items-center justify-between px-7 sticky top-0 z-30"
+        {/* Topbar — bell removed, only hamburger + title + search + sort */}
+        <header className="h-14 bg-white flex items-center justify-between px-4 lg:px-7 sticky top-0 z-30"
           style={{ borderBottom: '1px solid #e8eaf0' }}>
-          <span className="text-[15px] font-semibold text-gray-800">My Tasks</span>
           <div className="flex items-center gap-2">
+            {/* Hamburger — mobile only */}
+            <button onClick={() => setShowSidebar(true)}
+              className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center hover:bg-gray-100 transition"
+              style={{ border: '1.5px solid #e8eaf0', color: '#374151' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <span className="text-[15px] font-semibold text-gray-800">My Tasks</span>
+          </div>
 
-            <div className="relative">
-              <button onClick={() => setShowNotif(!showNotif)}
-                className="w-9 h-9 rounded-xl border flex items-center justify-center text-gray-500 hover:bg-gray-50 transition relative"
-                style={{ borderColor: '#e8eaf0' }}>
-                <i className="ti ti-bell text-[17px]" />
-                {unread > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
-                    {unread}
-                  </span>
-                )}
-              </button>
-              {showNotif && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border z-50 overflow-hidden"
-                  style={{ borderColor: '#e8eaf0' }}>
-                  <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid #f0f1f5' }}>
-                    <span className="text-sm font-semibold text-gray-800">Notifications</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">{unread} unread</span>
-                      {unread > 0 && (
-                        <button onClick={async () => {
-                          try {
-                            await api.patch('/tasks/notifications/read')
-                            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-                          } catch (err) { console.error(err) }
-                        }} className="text-xs text-blue-600 font-semibold px-2 py-0.5 rounded-lg hover:bg-blue-50 transition">
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <p className="text-center py-8 text-xs text-gray-400">No notifications</p>
-                    ) : notifications.slice(0, 10).map(n => (
-                      <div key={n.id}
-                        className={`px-4 py-3 hover:bg-gray-50 transition ${!n.is_read ? 'bg-blue-50/40' : ''}`}
-                        style={{ borderBottom: '1px solid #f5f6fa' }}>
-                        <div className="flex items-start gap-2">
-                          {!n.is_read && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0" />}
-                          <div>
-                            <p className="text-xs text-gray-700">{n.message}</p>
-                            <p className="text-[11px] text-gray-400 mt-0.5">{new Date(n.created_at).toLocaleString()}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
+          <div className="flex items-center gap-2">
+            {/* Search */}
+            <div className="relative hidden sm:block">
               <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
               <input type="text" placeholder="Search tasks..." value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-8 pr-4 py-2 text-[13px] rounded-xl border focus:outline-none focus:border-blue-400 transition"
-                style={{ borderColor: '#e8eaf0', width: 200 }} />
+                style={{ borderColor: '#e8eaf0', width: 180 }} />
             </div>
 
+            {/* Sort */}
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
               className="px-3 py-2 text-[13px] rounded-xl border focus:outline-none transition"
               style={{ borderColor: '#e8eaf0' }}>
@@ -305,30 +310,41 @@ export default function TasksPage() {
           </div>
         </header>
 
-        <main className="flex-1 p-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          {/* Search — mobile only */}
+          <div className="sm:hidden mb-4 relative">
+            <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
+            <input type="text" placeholder="Search tasks..." value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-8 pr-4 py-2.5 text-[13px] rounded-xl border focus:outline-none focus:border-blue-400 transition bg-white"
+              style={{ borderColor: '#e8eaf0' }} />
+          </div>
+
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:gap-4 mb-6 lg:mb-8">
             {[
               { label: 'Total tasks', value: tasks.length,       icon: 'ti-checklist',     color: '#2563eb', bg: '#eff6ff' },
               { label: 'In progress', value: counts.in_progress, icon: 'ti-loader',         color: '#9333ea', bg: '#faf5ff' },
               { label: 'Due today',   value: tasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length, icon: 'ti-clock', color: '#ca8a04', bg: '#fefce8' },
               { label: 'Overdue',     value: overdue,            icon: 'ti-alert-triangle', color: '#dc2626', bg: '#fef2f2' },
             ].map((s, i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 flex items-center gap-4"
+              <div key={i} className="bg-white rounded-2xl p-4 lg:p-5 flex items-center gap-3 lg:gap-4"
                 style={{ border: '1px solid #e8eaf0' }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
+                <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-xl flex items-center justify-center text-base lg:text-lg shrink-0"
                   style={{ backgroundColor: s.bg, color: s.color }}>
                   <i className={`ti ${s.icon}`} />
                 </div>
                 <div>
-                  <div className="text-[24px] font-bold text-gray-900 leading-none">{s.value}</div>
-                  <div className="text-[12px] text-gray-400 mt-0.5">{s.label}</div>
+                  <div className="text-[20px] lg:text-[24px] font-bold text-gray-900 leading-none">{s.value}</div>
+                  <div className="text-[11px] lg:text-[12px] text-gray-400 mt-0.5">{s.label}</div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="flex gap-2 mb-6 flex-wrap">
+          {/* Status + priority filters */}
+          <div className="flex gap-2 mb-5 lg:mb-6 flex-wrap">
             {[
               { key: 'all',         label: 'All' },
               { key: 'todo',        label: 'To Do' },
@@ -344,7 +360,7 @@ export default function TasksPage() {
                 {f.label} <span className="ml-1 opacity-70">{counts[f.key] ?? tasks.length}</span>
               </button>
             ))}
-            <div className="ml-auto flex gap-2 flex-wrap">
+            <div className="ml-auto flex gap-1.5 flex-wrap">
               {['all', 'critical', 'high', 'medium', 'low'].map(p => (
                 <button key={p} onClick={() => setPriority(p)}
                   className="px-3 py-1.5 rounded-full text-xs font-semibold transition border"
@@ -357,6 +373,7 @@ export default function TasksPage() {
             </div>
           </div>
 
+          {/* Task list */}
           {loading ? (
             <div className="space-y-3">
               {[1,2,3,4,5].map(i => (
@@ -372,7 +389,7 @@ export default function TasksPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl border border-dashed"
+            <div className="text-center py-16 lg:py-20 bg-white rounded-2xl border border-dashed"
               style={{ borderColor: '#d1d5db' }}>
               <i className="ti ti-checklist text-5xl text-gray-200 block mb-3" />
               <p className="text-sm font-semibold text-gray-400">No tasks found</p>
@@ -388,7 +405,7 @@ export default function TasksPage() {
                 const s = STATUS_STYLE[task.status]     || STATUS_STYLE.todo
                 return (
                   <div key={task.id}
-                    className="bg-white rounded-2xl px-5 py-4 flex items-center gap-4 group transition hover:shadow-sm"
+                    className="bg-white rounded-2xl px-4 lg:px-5 py-3.5 lg:py-4 flex items-center gap-3 lg:gap-4 group transition hover:shadow-sm"
                     style={{ border: '1px solid #e8eaf0' }}>
                     <button
                       onClick={() => handleStatusChange(task.id, task.status === 'done' ? 'todo' : 'done')}
@@ -422,7 +439,7 @@ export default function TasksPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {task.priority && (
-                        <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold flex items-center gap-1"
+                        <span className="hidden sm:flex text-[11px] px-2.5 py-1 rounded-full font-semibold items-center gap-1"
                           style={{ backgroundColor: p.bg, color: p.text }}>
                           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: p.dot }} />
                           {task.priority}

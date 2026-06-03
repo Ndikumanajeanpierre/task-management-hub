@@ -131,10 +131,33 @@ export default function DashboardPage() {
   }
 
   const markAllRead = async () => {
+    // Optimistic update immediately
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     try {
       await api.patch('/tasks/notifications/read')
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-    } catch (err) { console.error(err) }
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err)
+      // Revert on failure
+      fetchNotifications()
+    }
+  }
+
+  // ── Mark a single notification as read ──
+  // Returns a promise so it can be awaited before navigation
+  const markSingleRead = async (id) => {
+    // Optimistic update first so the UI responds instantly
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+    )
+    try {
+      await api.patch(`/tasks/notifications/${id}/read`)
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err)
+      // Revert this single notification on failure
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, is_read: false } : n)
+      )
+    }
   }
 
   // ── Navigate to correct page when notification is clicked ──
@@ -142,12 +165,20 @@ export default function DashboardPage() {
     setShowNotif(false)
     setNavigatingNotif(n.id)
 
+    // ── IMPORTANT: await the read update BEFORE navigating ──
+    // This ensures the state update is committed and the badge
+    // decrements correctly before the component potentially remounts
+    if (!n.is_read) {
+      await markSingleRead(n.id)
+    }
+
     try {
       // task_assigned, task_updated, comment — fetch task to get project_id
       if (
         n.type === 'task_assigned' ||
         n.type === 'task_updated'  ||
-        n.type === 'comment'
+        n.type === 'comment'       ||
+        n.type === 'comment_added'
       ) {
         if (n.reference_id) {
           try {
@@ -194,6 +225,9 @@ export default function DashboardPage() {
 
   const handleLogout = () => { logout(); navigate('/login') }
 
+  // unread count is derived directly from notifications state —
+  // because markSingleRead does an optimistic update, this
+  // automatically decrements as notifications are clicked
   const unread           = notifications.filter(n => !n.is_read).length
   const activeCount      = projects.filter(p => p.status === 'active').length
   const totalTasks       = projects.reduce((s, p) => s + (parseInt(p.task_count) || 0), 0)

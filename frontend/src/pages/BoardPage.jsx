@@ -24,7 +24,7 @@ export default function BoardPage() {
   const [createModal, setCreateModal]       = useState(null)
   const [editingProject, setEditingProject] = useState(false)
   const [projectForm, setProjectForm]       = useState({})
-  const [allTeams, setAllTeams]             = useState([])   // ← new
+  const [allTeams, setAllTeams]             = useState([])
   const [filter, setFilter]                 = useState({
     priority: '', search: '', assigned_to: '', due_date_from: '', due_date_to: ''
   })
@@ -39,25 +39,35 @@ export default function BoardPage() {
   // ── Fetch all data ──────────────────────────────────────
   const fetchData = async () => {
     try {
-      const [projRes, tasksRes, logsRes, teamsRes] = await Promise.all([
+      // Critical — must succeed
+      const [projRes, tasksRes] = await Promise.all([
         api.get(`/projects/${id}`),
         api.get(`/tasks/project/${id}`),
-        api.get(`/projects/${id}/activity`),
-        api.get('/teams'),                          // ← fetch all teams
       ])
       setProject(projRes.data.project)
-      setTasks(tasksRes.data.tasks)
-      setActivityLogs(logsRes.data.logs)
-      setAllTeams(teamsRes.data.teams || [])        // ← set all teams
+      setTasks(tasksRes.data.tasks || [])
 
+      // Non-critical — won't break board if they fail
+      try {
+        const logsRes = await api.get(`/projects/${id}/activity`)
+        setActivityLogs(logsRes.data.logs || [])
+      } catch (err) { console.error('Activity logs failed:', err); setActivityLogs([]) }
+
+      try {
+        const teamsRes = await api.get('/teams')
+        setAllTeams(teamsRes.data.teams || [])
+      } catch (err) { console.error('Teams failed:', err); setAllTeams([]) }
+
+      // Team members
       if (projRes.data.project?.team_id) {
         try {
           const teamRes = await api.get(`/teams/${projRes.data.project.team_id}`)
           setMembers(teamRes.data.team?.members || [])
-        } catch (err) { console.error('Failed to fetch members:', err) }
+        } catch (err) { console.error('Members failed:', err); setMembers([]) }
       }
+
     } catch (err) {
-      console.error(err)
+      console.error('BoardPage fetchData error:', err)
     } finally {
       setLoading(false)
     }
@@ -66,7 +76,7 @@ export default function BoardPage() {
   const fetchTasks = async () => {
     try {
       const res = await api.get(`/tasks/project/${id}`)
-      setTasks(res.data.tasks)
+      setTasks(res.data.tasks || [])
     } catch (err) { console.error(err) }
   }
 
@@ -172,53 +182,55 @@ export default function BoardPage() {
 
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
-        <div className="max-w-full mx-auto px-6">
+        <div className="max-w-full mx-auto px-3 sm:px-6">
           <div className="flex justify-between items-center h-16">
 
             {/* Left */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="text-gray-400 hover:text-gray-700 text-sm font-medium transition"
+                className="text-gray-400 hover:text-gray-700 text-sm font-medium transition shrink-0"
               >
-                ← Dashboard
+                ← <span className="hidden sm:inline">Dashboard</span>
               </button>
-              <div className="w-px h-6 bg-gray-200"></div>
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+              <div className="w-px h-6 bg-gray-200 shrink-0"></div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md shrink-0">
                 <span className="text-white text-sm font-bold">
                   {project?.name?.charAt(0).toUpperCase()}
                 </span>
               </div>
-              <div>
-                <h1 className="font-bold text-gray-800 text-base leading-tight">{project?.name}</h1>
-                <p className="text-xs text-gray-400">{project?.team_name}</p>
+              <div className="min-w-0">
+                <h1 className="font-bold text-gray-800 text-sm sm:text-base leading-tight truncate max-w-[120px] sm:max-w-xs">
+                  {project?.name}
+                </h1>
+                <p className="text-xs text-gray-400 truncate">{project?.team_name}</p>
               </div>
             </div>
 
             {/* Right */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
               {/* Filter Toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition ${
+                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-2.5 sm:px-4 py-2 rounded-xl transition ${
                   showFilters || hasActiveFilters
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                🔽 Filters
+                🔽 <span className="hidden sm:inline">Filters</span>
                 {hasActiveFilters && <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>}
               </button>
 
               {/* Activity Feed */}
               <button
                 onClick={() => setShowActivity(!showActivity)}
-                className={`flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition ${
+                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-2.5 sm:px-4 py-2 rounded-xl transition ${
                   showActivity ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                📜 Activity
+                📜 <span className="hidden sm:inline">Activity</span>
                 {activityLogs.length > 0 && (
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                     showActivity ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-600'
@@ -229,7 +241,7 @@ export default function BoardPage() {
               </button>
 
               {/* Project Status */}
-              <span className={`text-xs px-3 py-1.5 rounded-full font-semibold ${
+              <span className={`hidden sm:inline text-xs px-3 py-1.5 rounded-full font-semibold ${
                 project?.status === 'active'    ? 'bg-emerald-100 text-emerald-700' :
                 project?.status === 'completed' ? 'bg-blue-100 text-blue-700' :
                 project?.status === 'on_hold'   ? 'bg-amber-100 text-amber-700' :
@@ -247,13 +259,13 @@ export default function BoardPage() {
                       description: project?.description || '',
                       status:      project?.status || 'active',
                       end_date:    project?.end_date ? project.end_date.split('T')[0] : '',
-                      team_id:     project?.team_id || '',   // ← pre-select current team
+                      team_id:     project?.team_id || '',
                     })
                     setEditingProject(true)
                   }}
-                  className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold px-3 py-1.5 rounded-xl transition"
+                  className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold px-2.5 sm:px-3 py-1.5 rounded-xl transition"
                 >
-                  ✏️ Edit
+                  ✏️ <span className="hidden sm:inline">Edit</span>
                 </button>
               )}
 
@@ -267,7 +279,7 @@ export default function BoardPage() {
                       fetchData()
                     } catch (err) { console.error(err) }
                   }}
-                  className="text-xs bg-amber-50 text-amber-600 hover:bg-amber-100 font-semibold px-3 py-1.5 rounded-xl transition"
+                  className="hidden sm:flex text-xs bg-amber-50 text-amber-600 hover:bg-amber-100 font-semibold px-3 py-1.5 rounded-xl transition items-center"
                 >
                   📦 Archive
                 </button>
@@ -276,7 +288,7 @@ export default function BoardPage() {
               {/* Live Indicator */}
               <div className="flex items-center gap-1.5">
                 <div className={`w-2 h-2 rounded-full ${socket?.connected ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
-                <span className="text-xs text-gray-400">{socket?.connected ? 'Live' : 'Offline'}</span>
+                <span className="text-xs text-gray-400 hidden sm:inline">{socket?.connected ? 'Live' : 'Offline'}</span>
               </div>
             </div>
           </div>
@@ -285,7 +297,7 @@ export default function BoardPage() {
 
       {/* Filter Bar */}
       {showFilters && (
-        <div className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm">
+        <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 shadow-sm">
           <div className="flex flex-wrap gap-3 items-end">
             <div>
               <label className="block text-xs font-semibold text-gray-400 mb-1">Search</label>
@@ -294,7 +306,7 @@ export default function BoardPage() {
                 placeholder="Search tasks..."
                 value={filter.search}
                 onChange={e => setFilter(f => ({ ...f, search: e.target.value }))}
-                className="text-sm px-3 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 w-44 transition"
+                className="text-sm px-3 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 w-36 sm:w-44 transition"
               />
             </div>
             <div>
@@ -361,9 +373,9 @@ export default function BoardPage() {
 
       <div className="flex h-full">
         {/* Kanban Board */}
-        <div className={`flex-1 p-6 transition-all duration-300 ${showActivity ? 'mr-80' : ''}`}>
+        <div className={`flex-1 p-3 sm:p-6 transition-all duration-300 ${showActivity ? 'mr-0 sm:mr-80' : ''}`}>
           <DragDropContext onDragEnd={onDragEnd}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
               {COLUMNS.map(col => (
                 <KanbanColumn
                   key={col}
@@ -380,7 +392,7 @@ export default function BoardPage() {
 
         {/* Activity Feed Sidebar */}
         {showActivity && (
-          <div className="fixed right-0 top-16 bottom-0 w-80 bg-white border-l border-gray-200 shadow-xl z-20 flex flex-col">
+          <div className="fixed right-0 top-16 bottom-0 w-full sm:w-80 bg-white border-l border-gray-200 shadow-xl z-20 flex flex-col">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-bold text-gray-800">📜 Activity Feed</h3>
               <button onClick={() => setShowActivity(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
@@ -410,7 +422,7 @@ export default function BoardPage() {
       {/* Edit Project Modal */}
       {editingProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-bold text-gray-800">✏️ Edit Project</h2>
               <button onClick={() => setEditingProject(false)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
@@ -434,8 +446,6 @@ export default function BoardPage() {
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 resize-none"
                 />
               </div>
-
-              {/* Team selector */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Team</label>
                 <select
@@ -449,7 +459,6 @@ export default function BoardPage() {
                   ))}
                 </select>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Status</label>

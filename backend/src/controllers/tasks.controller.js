@@ -1,7 +1,7 @@
 const db = require('../config/db');
 
 // ─── helper: notify all admins and managers ───────────────────────────────
-const notifyAdminsAndManagers = async (message, reference_id, excludeUserId = null) => {
+const notifyAdminsAndManagers = async (message, reference_id, type = 'system', excludeUserId = null) => {
   const [admins] = await db.query(
     `SELECT id FROM users WHERE role IN ('admin', 'manager') ${excludeUserId ? 'AND id != ?' : ''}`,
     excludeUserId ? [excludeUserId] : []
@@ -9,7 +9,7 @@ const notifyAdminsAndManagers = async (message, reference_id, excludeUserId = nu
   for (const admin of admins) {
     await db.query(
       'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
-      [admin.id, 'system', message, reference_id]
+      [admin.id, type, message, reference_id]
     );
   }
 };
@@ -51,7 +51,7 @@ const createTask = async (req, res) => {
       [req.user.id, project_id, result.insertId, 'task_created', `Task "${title}" was created`]
     );
 
-    if (assigned_to) {
+    if (assigned_to && assigned_to !== req.user.id) {
       await db.query(
         'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
         [assigned_to, 'task_assigned', `You have been assigned a new task: "${title}"`, result.insertId]
@@ -59,9 +59,10 @@ const createTask = async (req, res) => {
     }
 
     await notifyAdminsAndManagers(
-      `New task created: "${title}" in project by ${req.user.name}`,
+      `New task created: "${title}" by ${req.user.name}`,
       result.insertId,
-      req.user.id
+      'system',
+      null
     );
 
     const io = req.app.get('io');
@@ -175,18 +176,19 @@ const updateTask = async (req, res) => {
          `Task "${task.title}" moved to ${status}`]
       );
 
-      if (task.assigned_to) {
+      if (task.assigned_to && task.assigned_to !== req.user.id) {
         await db.query(
           'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
           [task.assigned_to, 'task_updated',
-           `Task "${task.title}" status changed to ${status}`, req.params.id]
+           `Task "${task.title}" status changed to ${status} by ${req.user.name}`, req.params.id]
         );
       }
 
       await notifyAdminsAndManagers(
         `Task "${task.title}" status changed to ${status} by ${req.user.name}`,
         req.params.id,
-        req.user.id
+        'task_updated',
+        null
       );
     }
 
@@ -195,6 +197,13 @@ const updateTask = async (req, res) => {
         'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)',
         [assigned_to, 'task_assigned',
          `You have been assigned to task: "${task.title}"`, req.params.id]
+      );
+
+      await notifyAdminsAndManagers(
+        `Task "${task.title}" was reassigned by ${req.user.name}`,
+        req.params.id,
+        'system',
+        null
       );
     }
 
@@ -222,10 +231,17 @@ const deleteTask = async (req, res) => {
 
     await db.query('DELETE FROM tasks WHERE id = ?', [req.params.id]);
 
+    await db.query(
+      'INSERT INTO activity_logs (user_id, project_id, task_id, action, details) VALUES (?, ?, ?, ?, ?)',
+      [req.user.id, task.project_id, req.params.id, 'task_deleted',
+       `Task "${task.title}" was deleted`]
+    );
+
     await notifyAdminsAndManagers(
       `Task "${task.title}" was deleted by ${req.user.name}`,
       task.project_id,
-      req.user.id
+      'system',
+      null
     );
 
     const io = req.app.get('io');
@@ -272,7 +288,8 @@ const addComment = async (req, res) => {
     await notifyAdminsAndManagers(
       `${req.user.name} commented on task "${task.title}": "${content.substring(0, 60)}${content.length > 60 ? '...' : ''}"`,
       req.params.id,
-      req.user.id
+      'comment',
+      null
     );
 
     const io = req.app.get('io');
@@ -292,7 +309,7 @@ const addComment = async (req, res) => {
   }
 };
 
-// GET notifications — smart join to get project_id for navigation
+// GET notifications
 const getNotifications = async (req, res) => {
   try {
     const [notifications] = await db.query(
@@ -366,16 +383,37 @@ const getAttachments = async (req, res) => {
   }
 };
 
-// MARK notifications as read
+// MARK ALL notifications as read
 const markNotificationsRead = async (req, res) => {
   try {
     await db.query(
       'UPDATE notifications SET is_read = TRUE WHERE user_id = ?',
       [req.user.id]
     );
-    return res.status(200).json({ success: true, message: 'Notifications marked as read.' });
+    return res.status(200).json({ success: true, message: 'All notifications marked as read.' });
   } catch (error) {
     console.error('MarkNotificationsRead error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
+// MARK SINGLE notification as read
+const markSingleNotificationRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await db.query(
+      'UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?',
+      [id, req.user.id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Notification not found.' });
+    }
+
+    return res.status(200).json({ success: true, message: 'Notification marked as read.' });
+  } catch (error) {
+    console.error('MarkSingleNotificationRead error:', error.message);
     return res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
@@ -410,5 +448,6 @@ module.exports = {
   uploadAttachment,
   getAttachments,
   markNotificationsRead,
+  markSingleNotificationRead,
   getMyTasks,
 };

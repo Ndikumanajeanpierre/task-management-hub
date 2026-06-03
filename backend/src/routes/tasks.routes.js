@@ -13,6 +13,7 @@ const {
   uploadAttachment,
   getAttachments,
   markNotificationsRead,
+  markSingleNotificationRead,
   getMyTasks
 } = require('../controllers/tasks.controller')
 const { auth } = require('../middleware/auth')
@@ -36,16 +37,17 @@ const upload = multer({
   }
 })
 
-router.post('/',                        auth,                        createTask)
-router.get('/my',                       auth,                        getMyTasks)
-router.get('/project/:projectId',       auth,                        getTasksByProject)
-router.get('/notifications',            auth,                        getNotifications)
-router.patch('/notifications/read',     auth,                        markNotificationsRead)
-router.get('/:id',                      auth,                        getTaskById)
-router.patch('/:id',                    auth,                        updateTask)
-router.delete('/:id',                   auth,                        deleteTask)
-router.post('/:id/comments',            auth,                        addComment)
-router.post('/:id/attachments',         auth, upload.single('file'), uploadAttachment)
-router.get('/:id/attachments',          auth,                        getAttachments)
+router.post('/',                              auth,                        createTask)
+router.get('/my',                             auth,                        getMyTasks)
+router.get('/project/:projectId',             auth,                        getTasksByProject)
+router.get('/notifications',                  auth,                        getNotifications)
+router.patch('/notifications/read',           auth,                        markNotificationsRead)
+router.patch('/notifications/:id/read',       auth,                        markSingleNotificationRead)
+router.get('/:id',                            auth,                        getTaskById)
+router.patch('/:id',                          auth,                        updateTask)
+router.delete('/:id',                         auth,                        deleteTask)
+router.post('/:id/comments',                  auth,                        addComment)
+router.post('/:id/attachments',               auth, upload.single('file'), uploadAttachment)
+router.get('/:id/attachments',                auth,                        getAttachments)
 
 module.exports = router
